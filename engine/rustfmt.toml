@@ -1,0 +1,31 @@
+# Rust 代码格式化配置
+# 运行: cargo fmt
+
+edition = "2021"
+max_width = 100
+hard_tabs = false
+tab_spaces = 4
+newline_style = "Unix"
+
+# 导入排序
+reorder_imports = true
+reorder_modules = true
+
+# 换行规则
+wrap_comments = true
+format_code_in_doc_comments = true
+
+# 链式调用
+chain_width = 60
+
+# 函数参数
+fn_params_layout = "Tall"
+fn_call_width = 60
+
+# 结构体/枚举
+struct_lit_width = 30
+struct_variant_width = 35
+
+# 数组/元组
+array_width = 60
+attr_fn_like_width = 70

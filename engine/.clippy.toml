@@ -1,0 +1,11 @@
+# Clippy 配置
+# 运行: cargo clippy
+
+# 允许的类型复杂度
+type-complexity-threshold = 300
+
+# 认知复杂度阈值
+cognitive-complexity-threshold = 25
+
+# 文档检查
+warn-on-missing-docs = true

@@ -1,0 +1,57 @@
+[package]
+name = "ming-rpg"
+version = "0.1.0"
+edition = "2021"
+authors = ["Yuki <your-email@example.com>"]
+description = "明朝修仙 RPG - 蝴蝶效应人生模拟"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourname/ming-rpg"
+
+[workspace]
+members = ["crates/*"]
+
+[dependencies]
+# 核心引擎框架
+bevy = { version = "0.13", features = ["dynamic_linking"] }
+
+# Lua 绑定
+mlua = { version = "0.9", features = ["lua54", "vendored", "serialize"] }
+
+# 序列化
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# 日志
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# 错误处理
+thiserror = "1.0"
+anyhow = "1.0"
+
+# 工具
+chrono = "0.4"          # 时间处理（游戏内日期）
+rand = "0.8"            # 随机数
+hashbrown = "0.14"      # 高性能 HashMap
+
+[dev-dependencies]
+# 测试工具
+pretty_assertions = "1.4"
+
+[profile.dev]
+opt-level = 1           # 开发模式轻度优化
+
+[profile.dev.package."*"]
+opt-level = 3           # 依赖项全优化
+
+[profile.release]
+opt-level = 3
+lto = "thin"            # 链接时优化
+strip = true            # 去除符号表
+panic = "abort"         #  panic 时直接退出
+
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"         # 体积优先
+lto = "fat"
