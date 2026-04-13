@@ -5,6 +5,7 @@
 //! 2. 错误透明 - 用 Result 传播错误，不 panic
 //! 3. 可测试 - 核心业务逻辑独立可测
 
+use bevy::log::LogPlugin;
 use bevy::prelude::*;
 use tracing::info;
 
@@ -30,8 +31,9 @@ fn main() -> anyhow::Result<()> {
     info!("主脚本加载完成");
 
     // 启动 Bevy 应用
+    // 注意：禁用 LogPlugin，因为我们已经在上面手动初始化了 tracing_subscriber
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.build().disable::<LogPlugin>())
         .add_systems(Startup, setup)
         .run();
 
