@@ -6,7 +6,7 @@ set_project("ming-rpg")
 set_version("0.1.0")
 
 -- 模式设置（默认 releasedbg：release + debug info）
-add_rules("mode.debug", "mode.release")
+add_rules("mode.debug", "mode.release", "mode.releasedbg")
 set_defaultmode("releasedbg")
 
 -- 自定义 releasedbg 模式配置（release 优化 + 调试信息）
@@ -198,12 +198,20 @@ task_end()
 task("check")
     set_category("plugin")
     on_run(function ()
+        local mode = get_config("mode") or "releasedbg"
+        local mode_flag = ""
+        if mode == "release" then
+            mode_flag = "--release"
+        elseif mode == "releasedbg" then
+            mode_flag = "--profile releasedbg"
+        end
+
         print("=== Checking Rust code ===")
         print("Running clippy...")
-        os.exec("cargo clippy --manifest-path engine/Cargo.toml -- -D warnings")
+        os.exec("cargo clippy --manifest-path engine/Cargo.toml " .. mode_flag .. " --no-deps -- -D warnings")
         
         print("Running tests...")
-        os.exec("cargo test --manifest-path engine/Cargo.toml")
+        os.exec("cargo test --manifest-path engine/Cargo.toml " .. mode_flag)
         
         print("\n=== Checking Lua code ===")
         if try {function () return os.iorunv("which", {"luacheck"}) end} then

@@ -11,9 +11,9 @@ newline_style = "Unix"
 reorder_imports = true
 reorder_modules = true
 
-# 换行规则
-wrap_comments = true
-format_code_in_doc_comments = true
+# 换行规则（以下两项需要 nightly rustfmt，stable 下会报警告）
+# wrap_comments = true
+# format_code_in_doc_comments = true
 
 # 链式调用
 chain_width = 60
