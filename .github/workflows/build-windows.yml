@@ -1,0 +1,55 @@
+name: Build Windows
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-action@stable
+    
+    - name: Install xmake
+      uses: xmake-io/github-action-setup-xmake@v1
+      with:
+        xmake-version: latest
+    
+    - name: Cache cargo dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          engine/target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Build (releasedbg)
+      run: |
+        xmake f -m releasedbg
+        xmake b
+    
+    - name: Run tests
+      run: xmake check
+    
+    - name: Build (release)
+      run: |
+        xmake f -m release
+        xmake b
+    
+    - name: Pack
+      run: xmake pack
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ming-rpg-windows
+        path: dist/

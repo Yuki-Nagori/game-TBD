@@ -112,28 +112,47 @@ target("ming-rpg")
         end
         local ext = is_plat("windows") and ".exe" or ""
         
-        -- 设置动态库路径（Rust std + bevy_dylib）
         local target_dir = path.absolute("engine/target/" .. build_dir)
         local deps_dir = path.join(target_dir, "deps")
         
-        -- 获取 Rust 工具链的 lib 目录（包含 libstd-*.so）
-        local rust_lib_dir = ""
-        local rustc_path = try {function () return os.iorunv("rustc", {"--print", "sysroot"}) end}
-        if rustc_path then
-            rust_lib_dir = path.join(rustc_path:trim(), "lib", "rustlib", "x86_64-unknown-linux-gnu", "lib")
+        -- 跨平台动态库路径设置
+        if is_plat("windows") then
+            -- Windows: 使用 PATH
+            local env_path = os.getenv("PATH") or ""
+            local new_path = target_dir .. ";" .. deps_dir
+            if env_path ~= "" then
+                new_path = new_path .. ";" .. env_path
+            end
+            os.setenv("PATH", new_path)
+        elseif is_plat("macosx") then
+            -- macOS: 使用 DYLD_LIBRARY_PATH
+            local env_dyld_path = os.getenv("DYLD_LIBRARY_PATH") or ""
+            local new_dyld_path = target_dir .. ":" .. deps_dir
+            if env_dyld_path ~= "" then
+                new_dyld_path = new_dyld_path .. ":" .. env_dyld_path
+            end
+            os.setenv("DYLD_LIBRARY_PATH", new_dyld_path)
+        else
+            -- Linux: 使用 LD_LIBRARY_PATH
+            -- 获取 Rust 工具链的 lib 目录（包含 libstd-*.so）
+            local rust_lib_dir = ""
+            local rustc_path = try {function () return os.iorunv("rustc", {"--print", "sysroot"}) end}
+            if rustc_path then
+                rust_lib_dir = path.join(rustc_path:trim(), "lib", "rustlib", "x86_64-unknown-linux-gnu", "lib")
+            end
+            
+            local env_ld_path = os.getenv("LD_LIBRARY_PATH") or ""
+            local new_ld_path = target_dir .. ":" .. deps_dir
+            if rust_lib_dir ~= "" then
+                new_ld_path = new_ld_path .. ":" .. rust_lib_dir
+            end
+            if env_ld_path ~= "" then
+                new_ld_path = new_ld_path .. ":" .. env_ld_path
+            end
+            os.setenv("LD_LIBRARY_PATH", new_ld_path)
         end
         
-        local env_ld_path = os.getenv("LD_LIBRARY_PATH") or ""
-        local new_ld_path = target_dir .. ":" .. deps_dir
-        if rust_lib_dir ~= "" then
-            new_ld_path = new_ld_path .. ":" .. rust_lib_dir
-        end
-        if env_ld_path ~= "" then
-            new_ld_path = new_ld_path .. ":" .. env_ld_path
-        end
-        
-        -- 设置环境变量并执行
-        os.setenv("LD_LIBRARY_PATH", new_ld_path)
+        -- 执行
         os.exec("\"" .. target_dir .. "/ming-rpg" .. ext .. "\"")
     end)
 
@@ -237,12 +256,9 @@ task("pack")
         end
         
         -- 2. Bevy 动态链接库
-        local dylib_pattern = path.absolute(target_dir .. "/deps/libbevy_dylib*.so")
-        if is_plat("windows") then
-            dylib_pattern = path.absolute(target_dir .. "/deps/bevy_dylib*.dll")
-        elseif is_plat("macosx") then
-            dylib_pattern = path.absolute(target_dir .. "/deps/libbevy_dylib*.dylib")
-        end
+        local dylib_ext = is_plat("windows") and ".dll" or (is_plat("macosx") and ".dylib" or ".so")
+        local dylib_prefix = is_plat("windows") and "" or "lib"
+        local dylib_pattern = path.absolute(target_dir .. "/deps/" .. dylib_prefix .. "bevy_dylib*" .. dylib_ext)
         
         local dylibs = os.files(dylib_pattern)
         for _, dylib in ipairs(dylibs) do
