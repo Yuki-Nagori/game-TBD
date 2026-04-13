@@ -1,0 +1,11 @@
+[package]
+name = "ming-rpg-core"
+version = "0.1.0"
+edition = "2021"
+authors = ["Yuki <your-email@example.com>"]
+description = "明朝修仙 RPG - 核心引擎库"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourname/ming-rpg"
+
+[dependencies]
+# 核心依赖（后续从主引擎迁移）

@@ -5,8 +5,12 @@
 set_project("ming-rpg")
 set_version("0.1.0")
 
--- 模式设置
+-- 模式设置（默认 releasedbg：release + debug info）
 add_rules("mode.debug", "mode.release")
+set_defaultmode("releasedbg")
+
+-- 添加自定义模式：releasedbg（release with debug info）
+-- 使用方式：xmake f -m releasedbg
 
 -- 编译选项：严格
 set_warnings("all", "error")
@@ -36,13 +40,6 @@ function check_rust()
     return true
 end
 
--- 配置阶段：检查依赖
-on_load(function (target)
-    if not os.getenv("SKIP_RUST_CHECK") then
-        check_rust()
-    end
-end)
-
 -- 引擎库目标（供后续 C API 导出用）
 target("engine")
     set_kind("static")
@@ -50,13 +47,23 @@ target("engine")
     
     on_build(function (target)
         os.cd("engine")
-        local mode = is_mode("release") and "--release" or ""
-        os.exec("cargo build " .. mode)
+        local mode_flag = ""
+        if is_mode("release") then
+            mode_flag = "--release"
+        elseif is_mode("releasedbg") then
+            mode_flag = "--profile releasedbg"
+        end
+        os.exec("cargo build " .. mode_flag)
         os.cd("..")
     end)
     
     on_install(function (target)
-        local build_dir = is_mode("release") and "release" or "debug"
+        local build_dir = "debug"
+        if is_mode("release") then
+            build_dir = "release"
+        elseif is_mode("releasedbg") then
+            build_dir = "releasedbg"
+        end
         os.cp("engine/target/" .. build_dir .. "/libming_rpg.a", target:targetdir())
     end)
     
@@ -76,20 +83,58 @@ target("ming-rpg")
     add_deps("engine")
     
     on_build(function (target)
-        local mode = is_mode("release") and "--release" or ""
-        os.exec("cargo build " .. mode .. " --manifest-path engine/Cargo.toml")
+        local mode_flag = ""
+        if is_mode("release") then
+            mode_flag = "--release"
+        elseif is_mode("releasedbg") then
+            mode_flag = "--profile releasedbg"
+        end
+        os.exec("cargo build " .. mode_flag .. " --manifest-path engine/Cargo.toml")
     end)
     
     on_install(function (target)
-        local build_dir = is_mode("release") and "release" or "debug"
+        local build_dir = "debug"
+        if is_mode("release") then
+            build_dir = "release"
+        elseif is_mode("releasedbg") then
+            build_dir = "releasedbg"
+        end
         local ext = is_plat("windows") and ".exe" or ""
         os.cp("engine/target/" .. build_dir .. "/ming-rpg" .. ext, target:targetdir())
     end)
     
     on_run(function (target)
-        local build_dir = is_mode("release") and "release" or "debug"
+        local build_dir = "debug"
+        if is_mode("release") then
+            build_dir = "release"
+        elseif is_mode("releasedbg") then
+            build_dir = "releasedbg"
+        end
         local ext = is_plat("windows") and ".exe" or ""
-        os.exec("engine/target/" .. build_dir .. "/ming-rpg" .. ext)
+        
+        -- 设置动态库路径（Rust std + bevy_dylib）
+        local target_dir = path.absolute("engine/target/" .. build_dir)
+        local deps_dir = path.join(target_dir, "deps")
+        
+        -- 获取 Rust 工具链的 lib 目录（包含 libstd-*.so）
+        local rust_lib_dir = ""
+        local rustc_path = try {function () return os.iorunv("rustc", {"--print", "sysroot"}) end}
+        if rustc_path then
+            rust_lib_dir = path.join(rustc_path:trim(), "lib", "rustlib", "x86_64-unknown-linux-gnu", "lib")
+        end
+        
+        local env_ld_path = os.getenv("LD_LIBRARY_PATH") or ""
+        local new_ld_path = target_dir .. ":" .. deps_dir
+        if rust_lib_dir ~= "" then
+            new_ld_path = new_ld_path .. ":" .. rust_lib_dir
+        end
+        if env_ld_path ~= "" then
+            new_ld_path = new_ld_path .. ":" .. env_ld_path
+        end
+        
+        -- 设置环境变量并执行
+        os.setenv("LD_LIBRARY_PATH", new_ld_path)
+        os.exec("\"" .. target_dir .. "/ming-rpg" .. ext .. "\"")
     end)
 
 target_end()
@@ -106,11 +151,6 @@ task("format")
             os.exec("stylua game/")
         else
             print("  stylua not found, install with: cargo install stylua")
-        end
-        
-        print("Formatting C/C++ code...")
-        if try {function () return os.iorunv("which", {"clang-format"}) end} then
-            os.exec("find engine -name '*.c' -o -name '*.cpp' -o -name '*.h' | xargs clang-format -i 2>/dev/null || true")
         end
         
         print("Done!")
@@ -147,17 +187,85 @@ task("check")
     }
 task_end()
 
--- 快速开发模式
-task("dev")
+-- 游戏打包任务（发布用）
+task("pack")
     set_category("plugin")
     on_run(function ()
-        print("Starting development mode...")
-        print("Features: Hot reload, debug symbols, fast compile")
-        os.exec("cargo run --manifest-path engine/Cargo.toml")
+        local version = "0.1.0"
+        -- 获取当前配置的模式
+        local mode = get_config("mode") or "releasedbg"
+        local build_dir = "debug"
+        if mode == "release" then
+            build_dir = "release"
+        elseif mode == "releasedbg" then
+            build_dir = "releasedbg"
+        end
+        
+        local ext = is_plat("windows") and ".exe" or ""
+        local binary_name = "ming-rpg" .. ext
+        local binary_path = path.absolute("engine/target/" .. build_dir .. "/" .. binary_name)
+        
+        -- 检查二进制是否存在
+        if not os.isfile(binary_path) then
+            print("错误：找不到二进制文件 " .. binary_path)
+            print("当前模式: " .. mode)
+            print("请先运行：xmake b")
+            os.exit(1)
+        end
+        
+        -- 创建发布目录
+        local dist_dir = "dist/ming-rpg-v" .. version
+        os.mkdir(dist_dir)
+        
+        -- 复制二进制
+        os.cp(binary_path, dist_dir .. "/")
+        
+        -- 复制动态库（Rust std + bevy_dylib）
+        local target_dir = "engine/target/" .. build_dir
+        
+        -- 1. Rust 标准库动态链接库
+        local std_pattern = path.absolute(target_dir .. "/libstd*.so")
+        if is_plat("windows") then
+            std_pattern = path.absolute(target_dir .. "/std*.dll")
+        elseif is_plat("macosx") then
+            std_pattern = path.absolute(target_dir .. "/libstd*.dylib")
+        end
+        
+        local std_libs = os.files(std_pattern)
+        for _, lib in ipairs(std_libs) do
+            os.cp(lib, dist_dir .. "/")
+        end
+        
+        -- 2. Bevy 动态链接库
+        local dylib_pattern = path.absolute(target_dir .. "/deps/libbevy_dylib*.so")
+        if is_plat("windows") then
+            dylib_pattern = path.absolute(target_dir .. "/deps/bevy_dylib*.dll")
+        elseif is_plat("macosx") then
+            dylib_pattern = path.absolute(target_dir .. "/deps/libbevy_dylib*.dylib")
+        end
+        
+        local dylibs = os.files(dylib_pattern)
+        for _, dylib in ipairs(dylibs) do
+            os.cp(dylib, dist_dir .. "/")
+        end
+        
+        -- 复制游戏脚本
+        os.mkdir(dist_dir .. "/game")
+        os.cp("game/*", dist_dir .. "/game/")
+        
+        -- 复制文档
+        os.cp("README.md", dist_dir .. "/")
+        os.cp("COPYING", dist_dir .. "/")
+        
+        print("=== 打包完成 ===")
+        print("输出目录: " .. dist_dir)
+        print("")
+        print("手动打包命令:")
+        print("  cd dist && zip -r ming-rpg-v" .. version .. ".zip ming-rpg-v" .. version)
     end)
     set_menu {
-        usage = "xmake dev",
-        description = "Run in development mode"
+        usage = "xmake pack",
+        description = "Pack game for distribution"
     }
 task_end()
 
@@ -189,6 +297,25 @@ task_end()
 task("setup")
     set_category("plugin")
     on_run(function ()
+        -- 内部函数：检查 Rust 工具链
+        local function check_rust()
+            local rust_version = try {function () return os.iorunv("rustc", {"--version"}) end}
+            if not rust_version then
+                print("错误：未检测到 Rust 工具链")
+                print("请安装 Rust: https://rustup.rs/")
+                print("或运行: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh")
+                os.exit(1)
+            end
+            print("检测到: " .. rust_version:trim())
+            
+            -- 检查 cargo
+            local cargo_version = try {function () return os.iorunv("cargo", {"--version"}) end}
+            if not cargo_version then
+                print("错误：未检测到 Cargo")
+                os.exit(1)
+            end
+        end
+        
         print("=== Setting up development environment ===")
         
         -- 检查 Rust
@@ -198,7 +325,17 @@ task("setup")
         -- 安装 Rust 工具
         print("\n2. Installing Rust tools...")
         print("  Installing stylua (Lua formatter)...")
-        os.exec("cargo install stylua 2>/dev/null || echo '  stylua already installed or failed'")
+        local stylua_installed = try {function () return os.iorunv("which", {"stylua"}) end}
+        if stylua_installed then
+            print("    stylua already installed")
+        else
+            local ok = try {function () os.run("cargo install stylua") return true end}
+            if ok then
+                print("    stylua installed successfully")
+            else
+                print("    stylua install failed (may already be installed)")
+            end
+        end
         
         -- 检查 Lua 工具
         print("\n3. Checking Lua tools...")
@@ -210,7 +347,12 @@ task("setup")
             print("  Warning: LuaRocks not found. Install with: apt install luarocks")
         else
             print("  Installing luacheck...")
-            os.exec("luarocks install luacheck 2>/dev/null || echo '  luacheck install skipped'")
+            local ok = try {function () os.run("luarocks install luacheck") return true end}
+            if ok then
+                print("    luacheck installed successfully")
+            else
+                print("    luacheck install failed (may already be installed)")
+            end
         end
         
         print("\n=== Setup complete ===")

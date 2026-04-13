@@ -7,5 +7,5 @@ type-complexity-threshold = 300
 # 认知复杂度阈值
 cognitive-complexity-threshold = 25
 
-# 文档检查
-warn-on-missing-docs = true
+# 文档检查（检查 crate 公开项是否有文档）
+missing-docs-in-crate-items = true

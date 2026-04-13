@@ -4,8 +4,8 @@
 //! 设计目标：为创意工坊 Mod 系统预留接口
 
 use mlua::{Lua, Result as LuaResult, Table, Value};
-use tracing::{error, info, warn};
 use std::path::Path;
+use tracing::{error, info, warn};
 
 /// Lua 运行时封装
 pub struct LuaRuntime {
@@ -46,6 +46,7 @@ impl LuaRuntime {
     }
 
     /// 加载 Mod（为创意工坊预留）
+    #[allow(dead_code)]
     pub fn load_mod<P: AsRef<Path>>(&self, mod_path: P) -> anyhow::Result<()> {
         let mod_path = mod_path.as_ref();
 
@@ -67,10 +68,8 @@ impl LuaRuntime {
 
     /// 注册核心 API（游戏内部使用）
     fn register_core_api(lua: &Lua) -> LuaResult<()> {
-        let core = lua.create_table()?;
-
-        // 日志函数
-        core.set(
+        // 日志函数（全局）
+        lua.globals().set(
             "log_info",
             lua.create_function(|_, msg: String| {
                 info!("[Lua] {}", msg);
@@ -78,7 +77,7 @@ impl LuaRuntime {
             })?,
         )?;
 
-        core.set(
+        lua.globals().set(
             "log_debug",
             lua.create_function(|_, msg: String| {
                 info!("[Lua:debug] {}", msg);
@@ -86,7 +85,7 @@ impl LuaRuntime {
             })?,
         )?;
 
-        core.set(
+        lua.globals().set(
             "log_warn",
             lua.create_function(|_, msg: String| {
                 warn!("[Lua] {}", msg);
@@ -94,7 +93,7 @@ impl LuaRuntime {
             })?,
         )?;
 
-        core.set(
+        lua.globals().set(
             "log_error",
             lua.create_function(|_, msg: String| {
                 error!("[Lua] {}", msg);
@@ -102,10 +101,11 @@ impl LuaRuntime {
             })?,
         )?;
 
-        // API 版本
+        // Core 表（保留用于其他核心功能）
+        let core = lua.create_table()?;
         core.set("version", "0.1.0")?;
-
         lua.globals().set("Core", core)?;
+
         Ok(())
     }
 
@@ -131,7 +131,7 @@ impl LuaRuntime {
         let event = lua.create_table()?;
         event.set(
             "on",
-            lua.create_function(|_, (event_name, callback): (String, Value)| {
+            lua.create_function(|_, (event_name, _callback): (String, Value)| {
                 info!("[Mod API] 订阅事件: {}", event_name);
                 // TODO: 实现事件订阅
                 Ok(())
@@ -140,7 +140,7 @@ impl LuaRuntime {
 
         event.set(
             "trigger",
-            lua.create_function(|_, (event_name, data): (String, Table)| {
+            lua.create_function(|_, (event_name, _data): (String, Table)| {
                 info!("[Mod API] 触发事件: {}", event_name);
                 // TODO: 实现事件触发
                 Ok(())
@@ -153,7 +153,7 @@ impl LuaRuntime {
         let world = lua.create_table()?;
         world.set(
             "get_variable",
-            lua.create_function(|_, key: String| {
+            lua.create_function(|_, _key: String| {
                 // TODO: 实现世界变量读取
                 Ok(Value::Nil)
             })?,
@@ -174,7 +174,7 @@ impl LuaRuntime {
         let player = lua.create_table()?;
         player.set(
             "add_item",
-            lua.create_function(|_, item: Table| {
+            lua.create_function(|_, _item: Table| {
                 info!("[Mod API] 添加物品到玩家");
                 // TODO: 实现物品添加
                 Ok(())
@@ -187,7 +187,7 @@ impl LuaRuntime {
         let history = lua.create_table()?;
         history.set(
             "on",
-            lua.create_function(|_, (event_id, handlers): (String, Table)| {
+            lua.create_function(|_, (event_id, _handlers): (String, Table)| {
                 info!("[Mod API] 注册历史事件钩子: {}", event_id);
                 // TODO: 实现历史事件钩子
                 Ok(())
@@ -213,10 +213,6 @@ mod tests {
     #[test]
     fn test_core_api() {
         let runtime = LuaRuntime::new().unwrap();
-        runtime
-            .lua
-            .load("Core.log_info('测试日志')")
-            .exec()
-            .unwrap();
+        runtime.lua.load("log_info('测试日志')").exec().unwrap();
     }
 }

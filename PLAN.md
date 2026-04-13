@@ -73,15 +73,20 @@
 
 ## 技术架构
 
+### 目录结构
+
 ```
 ~/game/
-├── engine/              # Rust 核心引擎 (Bevy)
-│   ├── Cargo.toml
-│   └── src/
-│       ├── core/        # 核心系统 (ECS、资源管理)
-│       ├── render/      # 渲染相关 (Bevy 封装)
-│       ├── lua_api/     # Lua 绑定接口
-│       └── platform/    # 平台抽象层
+├── engine/              # Rust 核心引擎 (Bevy Workspace)
+│   ├── Cargo.toml       # Workspace 根配置
+│   ├── src/
+│   │   ├── main.rs      # 主入口（当前所有代码）
+│   │   ├── core/        # 核心系统 (ECS、资源管理)
+│   │   └── lua_api/     # Lua 绑定接口
+│   └── crates/          # Workspace 成员（子 crate）
+│       └── core/        # 占位：未来迁移 core 模块至此
+│           ├── Cargo.toml
+│           └── src/lib.rs
 ├── game/                # Lua 游戏逻辑
 │   ├── entities/        # 实体定义 (角色、物品、功法)
 │   ├── systems/         # 游戏系统 (战斗、对话、任务)
@@ -98,6 +103,25 @@
 ├── docs/                # 文档
 └── xmake.lua            # 构建配置
 ```
+
+### `/crates` vs `/src` 设计
+
+| 目录 | 用途 | 当前状态 |
+|------|------|---------|
+| `engine/src/` | 主 crate 源代码 | ✅ 所有代码在此 |
+| `engine/crates/*` | Workspace 子 crate | 📝 占位，未来拆分 |
+
+**Workspace 演进计划：**
+
+- **阶段 1（现在）**：单 crate，代码在 `src/`，`crates/core/` 为占位符
+- **阶段 2（核心稳定后）**：将 `src/core/` 迁移至 `crates/core/`，独立编译
+- **阶段 3（完整架构）**：拆分为 `core`、`renderer`、`lua_api`、`save_system` 等
+
+**拆分好处：**
+1. **编译加速** - 修改一个 crate 不影响其他（增量编译缓存）
+2. **依赖隔离** - 核心逻辑不依赖渲染/网络库
+3. **代码复用** - `renderer` 可作为独立库发布
+4. **独立测试** - 每个 crate 可单独 `cargo test`
 
 ---
 
@@ -250,6 +274,13 @@
 - **美术风格**：极简 Low Poly，方块建筑占位
 - **战斗系统**：实时 ARPG（动作角色扮演）
 - **发布策略**：垂直切片 → EA → 逐步更新/DLC
+
+### 2026-04-13 构建系统完善
+- **构建工具**：xmake 主控 + cargo 编译 Rust
+- **代码检查**：clippy (Rust) + luacheck (Lua)
+- **格式化**：rustfmt + stylua
+- **Workspace 架构**：单 crate → 多 crate 演进规划
+- **跨平台**：Ubuntu/Fedora/Arch/macOS/Windows(MSVC)
 
 ### 美术方向：极简 Low Poly
 

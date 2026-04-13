@@ -1,15 +1,15 @@
 //! 明朝修仙 RPG - 主入口
-//! 
+//!
 //! 核心原则：
 //! 1. 简单明确 - 每个模块只做一件事
 //! 2. 错误透明 - 用 Result 传播错误，不 panic
 //! 3. 可测试 - 核心业务逻辑独立可测
 
 use bevy::prelude::*;
-use tracing::{info, warn};
+use tracing::info;
 
-mod lua_api;
 mod core;
+mod lua_api;
 
 use lua_api::LuaRuntime;
 
@@ -40,7 +40,7 @@ fn main() -> anyhow::Result<()> {
 
 fn setup(mut commands: Commands) {
     info!("Bevy 初始化完成");
-    
+
     // 相机
     commands.spawn(Camera3dBundle {
         transform: Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
