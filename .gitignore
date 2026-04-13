@@ -1,0 +1,26 @@
+# binary files
+*.vs
+*.so
+*.[oa]
+*.exe
+*.pyc
+build
+.kdev4
+*.kdev4
+*.py[cod]
+*$py.class
+__pycache__/
+
+# editor files
+*.sln
+.idea
+.vscode
+.claude/*
+!.claude/agents/
+
+# Mac OS
+.DS_Store
+*/.DS_Store
+
+.xmake/
+record
