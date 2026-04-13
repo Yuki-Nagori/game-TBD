@@ -9,6 +9,12 @@ set_version("0.1.0")
 add_rules("mode.debug", "mode.release")
 set_defaultmode("releasedbg")
 
+-- 自定义 releasedbg 模式配置（release 优化 + 调试信息）
+if is_mode("releasedbg") then
+    set_optimize("fastest")    -- 最高优化级别
+    set_symbols("debug")       -- 包含调试信息
+end
+
 -- 添加自定义模式：releasedbg（release with debug info）
 -- 使用方式：xmake f -m releasedbg
 
@@ -138,7 +144,15 @@ target("ming-rpg")
             local rust_lib_dir = ""
             local rustc_path = try {function () return os.iorunv("rustc", {"--print", "sysroot"}) end}
             if rustc_path then
-                rust_lib_dir = path.join(rustc_path:trim(), "lib", "rustlib", "x86_64-unknown-linux-gnu", "lib")
+                -- 获取当前 Rust 工具链的目标三重组
+                local rust_target = try {function () return os.iorunv("rustc", {"--print", "host"}) end}
+                if rust_target then
+                    rust_target = rust_target:trim()
+                    rust_lib_dir = path.join(rustc_path:trim(), "lib", "rustlib", rust_target, "lib")
+                else
+                    -- 回退到硬编码值（兼容旧版本）
+                    rust_lib_dir = path.join(rustc_path:trim(), "lib", "rustlib", "x86_64-unknown-linux-gnu", "lib")
+                end
             end
             
             local env_ld_path = os.getenv("LD_LIBRARY_PATH") or ""
@@ -296,10 +310,13 @@ task("pack-mod")
         os.mkdir("build/mods/" .. mod_name)
         os.cp("game/*", "build/mods/" .. mod_name .. "/")
         
-        -- 打包为 zip
-        os.cd("build/mods")
-        os.exec("zip -r " .. mod_name .. ".zip " .. mod_name)
-        os.cd("../..")
+        -- 打包为 zip（跨平台）
+        local zip_path = "build/mods/" .. mod_name .. ".zip"
+        local dir_path = "build/mods/" .. mod_name
+        if os.exists(zip_path) then
+            os.rm(zip_path)
+        end
+        os.zip(zip_path, dir_path)
         
         print("Mod packed: build/mods/" .. mod_name .. ".zip")
     end)
