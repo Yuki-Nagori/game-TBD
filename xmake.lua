@@ -340,11 +340,11 @@ task("setup")
         -- 检查 Lua 工具
         print("\n3. Checking Lua tools...")
         if not try {function () return os.iorunv("which", {"lua"}) end} then
-            print("  Warning: Lua not found. Install with: apt install lua5.4")
+            print("  Warning: Lua not found. Install with: apt(brew/scoop) install lua5.4")
         end
         
         if not try {function () return os.iorunv("which", {"luarocks"}) end} then
-            print("  Warning: LuaRocks not found. Install with: apt install luarocks")
+            print("  Warning: LuaRocks not found. Install with: apt(brew/scoop) install luarocks")
         else
             print("  Installing luacheck...")
             local ok = try {function () os.run("luarocks install luacheck") return true end}
@@ -356,7 +356,7 @@ task("setup")
         end
         
         print("\n=== Setup complete ===")
-        print("Run 'xmake dev' to start development")
+        print("Run 'xmake build' to start development")
     end)
     set_menu {
         usage = "xmake setup",
