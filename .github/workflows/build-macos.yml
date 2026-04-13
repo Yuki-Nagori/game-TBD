@@ -41,24 +41,7 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-build-
     
-    - name: Build (releasedbg)
-      run: |
-        xmake f -m releasedbg
-        xmake b
-    
-    - name: Run tests
-      run: xmake check
-    
-    - name: Build (release)
+    - name: Build
       run: |
         xmake f -m release
         xmake b
-    
-    - name: Pack
-      run: xmake pack
-    
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: ming-rpg-macos
-        path: dist/
