@@ -247,13 +247,6 @@ task("check")
                         table.insert(lua_files, f)
                     end
                 end
-                -- 递归检查子目录
-                local dirs = os.dirs(path.join(dir, "*"))
-                if dirs then
-                    for _, d in ipairs(dirs) do
-                        collect_lua_files(d)
-                    end
-                end
             end
 
             collect_lua_files("game")

@@ -20,6 +20,21 @@ jobs:
       with:
         toolchain: stable
     
+    - name: Cache dependencies
+      id: cache-deps
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          engine/target
+          ~/.xmake
+          ~/.luarocks
+          ~/.cargo/bin
+        key: ${{ runner.os }}-build-${{ hashFiles('engine/Cargo.lock', 'engine/Cargo.toml', 'xmake.lua') }}
+        restore-keys: |
+          ${{ runner.os }}-build-
+
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -38,30 +53,18 @@ jobs:
           luarocks
 
         # 安装 luacheck 和 stylua（使用本地安装避免权限问题）
-        luarocks install --local luacheck
-        cargo install stylua
+        if [ "${{ steps.cache-deps.outputs.cache-hit }}" != "true" ]; then
+          luarocks install --local luacheck
+          cargo install stylua
+        fi
 
         # 将 luarocks 和 cargo 二进制目录添加到 PATH
         echo "$HOME/.luarocks/bin:$HOME/.cargo/bin" >> $GITHUB_PATH
-    
+
     - name: Install xmake
       uses: xmake-io/github-action-setup-xmake@v1
       with:
         xmake-version: latest
-    
-    - name: Cache dependencies
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          engine/target
-          ~/.xmake
-          ~/.luarocks
-          ~/.cargo/bin
-        key: ${{ runner.os }}-build-${{ hashFiles('engine/Cargo.lock', 'engine/Cargo.toml', 'xmake.lua') }}
-        restore-keys: |
-          ${{ runner.os }}-build-
     
     - name: Build
       run: |
