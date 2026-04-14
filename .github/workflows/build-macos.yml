@@ -20,16 +20,8 @@ jobs:
       with:
         toolchain: stable
     
-    - name: Install dependencies
-      run: |
-        brew install pkg-config
-    
-    - name: Install xmake
-      uses: xmake-io/github-action-setup-xmake@v1
-      with:
-        xmake-version: latest
-    
     - name: Cache dependencies
+      id: cache-deps
       uses: actions/cache@v4
       with:
         path: |
@@ -37,11 +29,29 @@ jobs:
           ~/.cargo/git
           engine/target
           ~/.xmake
+          ~/.cargo/bin
         key: ${{ runner.os }}-build-${{ hashFiles('engine/Cargo.lock', 'engine/Cargo.toml', 'xmake.lua') }}
         restore-keys: |
           ${{ runner.os }}-build-
+
+    - name: Install dependencies
+      run: |
+        brew install pkg-config lua luacheck stylua
+
+    - name: Install xmake
+      uses: xmake-io/github-action-setup-xmake@v1
+      with:
+        xmake-version: latest
     
     - name: Build
       run: |
         xmake f -m release
         xmake b
+
+    - name: Run format check
+      run: |
+        xmake format-check
+
+    - name: Run full check
+      run: |
+        xmake check

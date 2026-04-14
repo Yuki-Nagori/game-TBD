@@ -19,13 +19,19 @@ jobs:
       uses: dtolnay/rust-toolchain@v1
       with:
         toolchain: stable
-    
+
+    - name: Configure git for line endings
+      run: |
+        git config --global core.autocrlf false
+        git config --global core.eol lf
+
     - name: Install xmake
       uses: xmake-io/github-action-setup-xmake@v1
       with:
         xmake-version: latest
-    
+
     - name: Cache dependencies
+      id: cache-deps
       uses: actions/cache@v4
       with:
         path: |
@@ -33,11 +39,42 @@ jobs:
           ~/.cargo/git
           engine/target
           ~/.xmake
+          ~/.luarocks
+          ~/.cargo/bin
         key: ${{ runner.os }}-build-${{ hashFiles('engine/Cargo.lock', 'engine/Cargo.toml', 'xmake.lua') }}
         restore-keys: |
           ${{ runner.os }}-build-
-    
+
+    - name: Install Lua dependencies (Windows)
+      run: |
+        choco install -y lua luarocks
+
+        # 安装 luacheck 和 stylua
+        if ("${{ steps.cache-deps.outputs.cache-hit }}" -ne "true") {
+          luarocks install luacheck --force
+          cargo install stylua --force
+        }
+
+        # 添加 luarocks 和 cargo 二进制目录到 PATH
+        echo "$env:APPDATA\luarocks\bin" >> $env:GITHUB_PATH
+        echo "$env:USERPROFILE\.cargo\bin" >> $env:GITHUB_PATH
+
     - name: Build
       run: |
         xmake f -m release
         xmake b
+
+    - name: Fix line endings for Rust files
+      run: |
+        # Convert CRLF to LF for Rust files
+        Get-ChildItem -Recurse -Filter "*.rs" -Path . | ForEach-Object {
+          (Get-Content $_.FullName -Raw) -replace "`r`n", "`n" | Set-Content -NoNewline $_.FullName
+        }
+
+    - name: Run format check
+      run: |
+        xmake format-check
+
+    - name: Run full check
+      run: |
+        xmake check

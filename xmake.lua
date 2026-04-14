@@ -194,6 +194,28 @@ task("format")
     }
 task_end()
 
+-- 格式检查任务（只检查不修改）
+task("format-check")
+    set_category("plugin")
+    on_run(function ()
+        print("Checking Rust code formatting...")
+        os.exec("cargo fmt --manifest-path engine/Cargo.toml --check")
+
+        print("Checking Lua code formatting...")
+        if try {function () return os.iorunv("which", {"stylua"}) end} then
+            os.exec("stylua --check game/")
+        else
+            print("  stylua not found, install with: cargo install stylua")
+        end
+
+        print("Format check passed!")
+    end)
+    set_menu {
+        usage = "xmake format-check",
+        description = "Check code formatting without modifying files"
+    }
+task_end()
+
 -- 检查任务
 task("check")
     set_category("plugin")
@@ -215,11 +237,31 @@ task("check")
         
         print("\n=== Checking Lua code ===")
         if try {function () return os.iorunv("which", {"luacheck"}) end} then
-            os.exec("luacheck game/")
+            -- 在所有平台上逐个文件检查，避免 Windows 上的目录权限问题
+            local lua_files = {}
+            -- 收集所有 Lua 文件
+            local function collect_lua_files(dir)
+                local files = os.files(path.join(dir, "**.lua"))
+                if files then
+                    for _, f in ipairs(files) do
+                        table.insert(lua_files, f)
+                    end
+                end
+            end
+
+            collect_lua_files("game")
+
+            if #lua_files > 0 then
+                for _, file in ipairs(lua_files) do
+                    os.exec("luacheck \"" .. file .. "\"")
+                end
+            else
+                print("  No Lua files found in game/")
+            end
         else
             print("  luacheck not found, install with: luarocks install luacheck")
         end
-        
+
         print("\nAll checks passed!")
     end)
     set_menu {

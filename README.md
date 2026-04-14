@@ -135,6 +135,7 @@ xmake build        # 构建（使用当前配置的模式）
 xmake run          # 构建并运行
 xmake check        # 代码检查（clippy + test + luacheck）
 xmake format       # 代码格式化（rustfmt + stylua）
+xmake format-check # 检查代码格式（不修改文件）
 xmake clean        # 清理构建产物
 
 # 4. 打包发布

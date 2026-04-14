@@ -282,6 +282,13 @@
 - **Workspace 架构**：单 crate → 多 crate 演进规划
 - **跨平台**：Ubuntu/Fedora/Arch/macOS/Windows(MSVC)
 
+### 2026-04-14 CI 与代码质量
+- **CI 集成**：GitHub Actions 跨平台构建 (Linux/macOS/Windows)
+- **代码质量检查**：CI 中自动运行 `xmake format-check` 和 `xmake check`
+- **格式检查命令**：新增 `xmake format-check` 用于 CI 环境（只检查不修改）
+- **Windows 兼容性**：修复 luacheck 在 Windows 上的目录权限问题
+- **Lua 工具安装**：CI 中自动安装 luacheck 和 stylua
+
 ### 美术方向：极简 Low Poly
 
 **核心原则：机制优先，画面从简**
