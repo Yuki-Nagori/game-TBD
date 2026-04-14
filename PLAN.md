@@ -73,55 +73,61 @@
 
 ## 技术架构
 
+**技术栈**：Rust (Bevy) + Lua + xmake
+
 ### 目录结构
 
 ```
 ~/game/
-├── engine/              # Rust 核心引擎 (Bevy Workspace)
-│   ├── Cargo.toml       # Workspace 根配置
+├── .github/
+│   └── workflows/           # CI 配置
+│       ├── build-linux.yml
+│       ├── build-macos.yml
+│       └── build-windows.yml
+│
+├── docs/                    # 文档
+│   ├── engine-design.md     # 引擎技术实现
+│   ├── lua-api.md           # Lua 接口规范
+│   ├── mod-system.md        # Mod 架构设计
+│   └── template-system.md   # 创作工具（Phase 4 后）
+│
+├── engine/                  # Rust 核心引擎
+│   ├── Cargo.toml
 │   ├── src/
-│   │   ├── main.rs      # 主入口（当前所有代码）
-│   │   ├── core/        # 核心系统 (ECS、资源管理)
-│   │   └── lua_api/     # Lua 绑定接口
-│   └── crates/          # Workspace 成员（子 crate）
-│       └── core/        # 占位：未来迁移 core 模块至此
-│           ├── Cargo.toml
-│           └── src/lib.rs
-├── game/                # Lua 游戏逻辑
-│   ├── entities/        # 实体定义 (角色、物品、功法)
-│   ├── systems/         # 游戏系统 (战斗、对话、任务)
-│   ├── scenes/          # 场景配置
-│   └── story/           # 剧情脚本
-├── assets/              # 游戏资源
-│   ├── models/          # 3D 模型
-│   ├── textures/        # 贴图
-│   ├── sounds/          # 音效/音乐
-│   ├── scripts/         # 剧情文本
-│   └── shaders/         # 自定义着色器
-├── tools/               # 开发工具
-│   └── editor/          # 关卡编辑器 (后续)
-├── docs/                # 文档
-└── xmake.lua            # 构建配置
+│   │   ├── main.rs          # 主入口
+│   │   ├── core/            # ECS 组件 (GameTime, Character...)
+│   │   └── lua_api/         # Lua 绑定
+│   └── crates/              # Workspace 子 crate（未来拆分）
+│       └── core/
+│
+├── game/                    # Lua 游戏逻辑（剧本）
+│   └── main.lua             # 入口脚本
+│
+├── assets/                  # 游戏资源（模型、贴图、音效）
+│
+├── tools/                   # 开发工具（后续添加）
+│
+├── PLAN.md                  # 本文件：游戏设计与开发计划
+├── README.md                # 项目简介
+├── xmake.lua               # 构建配置
+├── COPYING                 # 许可证说明
+├── LICENSE-APACHE          # Apache 许可证
+├── LICENSE-MIT             # MIT 许可证
+├── .gitignore
+├── .gitattributes
+├── .luacheckrc             # Lua 代码检查配置
+├── stylua.toml             # Lua 格式化配置
+└── rustfmt.toml            # Rust 格式化配置
 ```
 
-### `/crates` vs `/src` 设计
+### 引擎与剧本分离
 
-| 目录 | 用途 | 当前状态 |
-|------|------|---------|
-| `engine/src/` | 主 crate 源代码 | ✅ 所有代码在此 |
-| `engine/crates/*` | Workspace 子 crate | 📝 占位，未来拆分 |
-
-**Workspace 演进计划：**
-
-- **阶段 1（现在）**：单 crate，代码在 `src/`，`crates/core/` 为占位符
-- **阶段 2（核心稳定后）**：将 `src/core/` 迁移至 `crates/core/`，独立编译
-- **阶段 3（完整架构）**：拆分为 `core`、`renderer`、`lua_api`、`save_system` 等
-
-**拆分好处：**
-1. **编译加速** - 修改一个 crate 不影响其他（增量编译缓存）
-2. **依赖隔离** - 核心逻辑不依赖渲染/网络库
-3. **代码复用** - `renderer` 可作为独立库发布
-4. **独立测试** - 每个 crate 可单独 `cargo test`
+| 层级 | 技术 | 职责 | 文档 |
+|:---|:---|:---|:---|
+| 引擎 | Rust + Bevy | 渲染、物理、ECS、Lua 运行时 | [引擎设计](./docs/engine-design.md) |
+| API | Lua C API | 暴露给脚本的接口 | [Lua API](./docs/lua-api.md) |
+| 剧本 | Lua | 游戏逻辑、剧情、配置 | [Mod 系统](./docs/mod-system.md) |
+| 工具 | 脚本 | 创作辅助、打包发布 | [Template 系统](./docs/template-system.md) |
 
 ---
 
@@ -275,19 +281,27 @@
 - **战斗系统**：实时 ARPG（动作角色扮演）
 - **发布策略**：垂直切片 → EA → 逐步更新/DLC
 
-### 2026-04-13 构建系统完善
+### 2026-04-13 构建与质量
 - **构建工具**：xmake 主控 + cargo 编译 Rust
-- **代码检查**：clippy (Rust) + luacheck (Lua)
-- **格式化**：rustfmt + stylua
-- **Workspace 架构**：单 crate → 多 crate 演进规划
-- **跨平台**：Ubuntu/Fedora/Arch/macOS/Windows(MSVC)
+- **代码质量**：clippy + luacheck + rustfmt + stylua
+- **CI 集成**：GitHub Actions 三平台构建
+- **文档**：
+  - [引擎设计](./docs/engine-design.md) — Rust 实现细节
+  - [Lua API](./docs/lua-api.md) — 脚本接口规范
 
-### 2026-04-14 CI 与代码质量
-- **CI 集成**：GitHub Actions 跨平台构建 (Linux/macOS/Windows)
-- **代码质量检查**：CI 中自动运行 `xmake format-check` 和 `xmake check`
-- **格式检查命令**：新增 `xmake format-check` 用于 CI 环境（只检查不修改）
-- **Windows 兼容性**：修复 luacheck 在 Windows 上的目录权限问题
-- **Lua 工具安装**：CI 中自动安装 luacheck 和 stylua
+### 2026-04-15 核心机制确认
+- **时间流速**：维持 1 小时 = 1 年（60-100 小时完整一生），沉浸式人生体验
+- **战斗机制**：战斗时时间暂停，避免节奏冲突
+- **历史事件**：张居正改革（1573-1582）作为第一条事件链，9 小时默认剧本，玩家干预可改变走向
+- **开发策略**：先完成 Rust 引擎骨架，再逐步添加 Lua 逻辑
+
+### 2026-04-15 Mod 与剧本系统愿景
+- **核心定位**：引擎与剧本分离，支持任意时代/题材的互动叙事
+- **示例场景**：《基督山伯爵》复仇剧、《三国演义》权谋线、原创武侠、赛博朋克...
+- **技术基础**：Lua 脚本 + 资源包机制，创意工坊就绪
+- **子系统**：
+  - [Mod 系统架构](./docs/mod-system.md) — 剧本加载与管理
+  - [Template 系统](./docs/template-system.md) — 创作工具链（Phase 4 后开发）
 
 ### 美术方向：极简 Low Poly
 
