@@ -54,8 +54,8 @@ jobs:
 
         # 安装 luacheck 和 stylua（使用本地安装避免权限问题）
         if [ "${{ steps.cache-deps.outputs.cache-hit }}" != "true" ]; then
-          luarocks install --local luacheck
-          cargo install stylua
+          luarocks install --local luacheck --force
+          cargo install stylua --force
         fi
 
         # 将 luarocks 和 cargo 二进制目录添加到 PATH

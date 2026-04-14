@@ -19,7 +19,12 @@ jobs:
       uses: dtolnay/rust-toolchain@v1
       with:
         toolchain: stable
-    
+
+    - name: Configure git for line endings
+      run: |
+        git config --global core.autocrlf false
+        git config --global core.eol lf
+
     - name: Install xmake
       uses: xmake-io/github-action-setup-xmake@v1
       with:
@@ -46,8 +51,8 @@ jobs:
 
         # 安装 luacheck 和 stylua
         if ("${{ steps.cache-deps.outputs.cache-hit }}" -ne "true") {
-          luarocks install luacheck
-          cargo install stylua
+          luarocks install luacheck --force
+          cargo install stylua --force
         }
 
         # 添加 luarocks 和 cargo 二进制目录到 PATH
@@ -58,6 +63,13 @@ jobs:
       run: |
         xmake f -m release
         xmake b
+
+    - name: Fix line endings for Rust files
+      run: |
+        # Convert CRLF to LF for Rust files
+        Get-ChildItem -Recurse -Filter "*.rs" -Path . | ForEach-Object {
+          (Get-Content $_.FullName -Raw) -replace "`r`n", "`n" | Set-Content -NoNewline $_.FullName
+        }
 
     - name: Run format check
       run: |
