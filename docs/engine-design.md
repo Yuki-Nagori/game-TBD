@@ -108,6 +108,10 @@ tracing = "0.1"         # 日志
 serde = { version = "1.0", features = ["derive"] }  # 序列化
 notify = "6.1"          # 文件监听（热重载）
 uuid = { version = "1.7", features = ["v4"] }      # 实体 ID
+
+# 存档系统
+rusqlite = { version = "0.32", features = ["bundled"] }  # SQLite
+fjall = "2.0"           # LSM-Tree KV（缓存/日志）
 ```
 
 ## 构建流程
@@ -152,6 +156,105 @@ local year = Time.get_year()
 3. **资源异步加载** — Bevy AssetServer
 4. **增量编译** — Workspace 拆分后生效
 
+## 存档系统
+
+### 混合架构
+
+| 数据库 | 用途 | 场景 |
+|:---|:---|:---|
+| **SQLite** | 主数据库 | 装备、技能、成就、背包、NPC 关系 |
+| **Fjall** | 缓存/日志 | 高性能读写、事件流、临时数据 |
+
+### SQLite 表结构
+
+```sql
+-- 存档元数据
+CREATE TABLE save_meta (
+    slot INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    play_time INTEGER DEFAULT 0,  -- 秒
+    game_year INTEGER,
+    game_month INTEGER,
+    thumbnail BLOB                -- 截图缩略图
+);
+
+-- 蝴蝶效应变量
+CREATE TABLE butterfly_vars (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,          -- JSON
+    updated_at INTEGER
+);
+
+-- 角色状态
+CREATE TABLE characters (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT,                    -- player / npc
+    data TEXT NOT NULL,           -- JSON
+    location TEXT,
+    updated_at INTEGER
+);
+
+-- 装备
+CREATE TABLE equipment (
+    id TEXT PRIMARY KEY,
+    owner_id TEXT,                -- 角色ID
+    template_id TEXT NOT NULL,    -- 装备模板
+    enhance_level INTEGER DEFAULT 0,
+    affixes TEXT,                 -- JSON 随机词缀
+    FOREIGN KEY (owner_id) REFERENCES characters(id)
+);
+
+-- 技能
+CREATE TABLE skills (
+    id TEXT PRIMARY KEY,
+    owner_id TEXT NOT NULL,
+    template_id TEXT NOT NULL,
+    level INTEGER DEFAULT 1,
+    exp INTEGER DEFAULT 0,
+    is_active BOOLEAN DEFAULT 1,
+    FOREIGN KEY (owner_id) REFERENCES characters(id)
+);
+
+-- 成就
+CREATE TABLE achievements (
+    id TEXT PRIMARY KEY,
+    unlocked_at INTEGER,
+    progress INTEGER DEFAULT 0
+);
+```
+
+### Fjall 使用场景
+
+```rust
+// 高性能事件日志
+let event_log = keyspace.open_partition("events", ...)?;
+event_log.insert(timestamp, event_data).await?;
+
+// 临时缓存（如战斗中的伤害统计）
+let combat_cache = keyspace.open_partition("combat", ...)?;
+```
+
+### 存档目录
+
+```
+save/
+├── slot1.db              # SQLite 主存档
+├── slot1/
+│   └── events/           # Fjall 事件日志
+├── slot2.db
+├── slot2/
+│   └── events/
+└── auto/                 # 自动存档
+    ├── auto_001.db
+    └── auto_001/
+        └── events/
+```
+
+---
+
 ## 测试策略
 
 ```rust
@@ -168,6 +271,7 @@ mod tests {
 
 // 集成测试
 // tests/lua_api.rs — 测试 Lua 绑定
+// tests/save_system.rs — 测试存档读写
 ```
 
 ---
