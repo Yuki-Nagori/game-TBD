@@ -24,7 +24,15 @@ jobs:
       uses: xmake-io/github-action-setup-xmake@v1
       with:
         xmake-version: latest
-    
+
+    - name: Install Lua dependencies (Windows)
+      run: |
+        choco install -y lua luarocks
+
+        # 安装 luacheck 和 stylua
+        luarocks install luacheck
+        cargo install stylua
+
     - name: Cache dependencies
       uses: actions/cache@v4
       with:
@@ -33,6 +41,8 @@ jobs:
           ~/.cargo/git
           engine/target
           ~/.xmake
+          ~/.luarocks
+          ~/.cargo/bin
         key: ${{ runner.os }}-build-${{ hashFiles('engine/Cargo.lock', 'engine/Cargo.toml', 'xmake.lua') }}
         restore-keys: |
           ${{ runner.os }}-build-
@@ -41,3 +51,11 @@ jobs:
       run: |
         xmake f -m release
         xmake b
+
+    - name: Run format check
+      run: |
+        xmake format-check
+
+    - name: Run full check
+      run: |
+        xmake check

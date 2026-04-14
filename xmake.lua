@@ -194,6 +194,28 @@ task("format")
     }
 task_end()
 
+-- 格式检查任务（只检查不修改）
+task("format-check")
+    set_category("plugin")
+    on_run(function ()
+        print("Checking Rust code formatting...")
+        os.exec("cargo fmt --manifest-path engine/Cargo.toml --check")
+
+        print("Checking Lua code formatting...")
+        if try {function () return os.iorunv("which", {"stylua"}) end} then
+            os.exec("stylua --check game/")
+        else
+            print("  stylua not found, install with: cargo install stylua")
+        end
+
+        print("Format check passed!")
+    end)
+    set_menu {
+        usage = "xmake format-check",
+        description = "Check code formatting without modifying files"
+    }
+task_end()
+
 -- 检查任务
 task("check")
     set_category("plugin")
