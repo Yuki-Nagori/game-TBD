@@ -37,8 +37,8 @@ jobs:
           lua5.4 \
           luarocks
 
-        # 安装 luacheck 和 stylua
-        luarocks install luacheck
+        # 安装 luacheck 和 stylua（使用本地安装避免权限问题）
+        luarocks install --local luacheck
         cargo install stylua
 
         # 将 luarocks 和 cargo 二进制目录添加到 PATH
