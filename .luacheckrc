@@ -18,6 +18,10 @@ globals = {
     "Component",
     "Event",
     "Log",
+    "log_info",
+    "GAME_CONFIG",
+    "init",
+    "update",
 }
 
 -- 允许未使用的参数（回调函数常见）

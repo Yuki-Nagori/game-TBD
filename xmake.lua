@@ -215,11 +215,38 @@ task("check")
         
         print("\n=== Checking Lua code ===")
         if try {function () return os.iorunv("which", {"luacheck"}) end} then
-            os.exec("luacheck game/")
+            -- 在所有平台上逐个文件检查，避免 Windows 上的目录权限问题
+            local lua_files = {}
+            -- 收集所有 Lua 文件
+            local function collect_lua_files(dir)
+                local files = os.files(path.join(dir, "**.lua"))
+                if files then
+                    for _, f in ipairs(files) do
+                        table.insert(lua_files, f)
+                    end
+                end
+                -- 递归检查子目录
+                local dirs = os.dirs(path.join(dir, "*"))
+                if dirs then
+                    for _, d in ipairs(dirs) do
+                        collect_lua_files(d)
+                    end
+                end
+            end
+
+            collect_lua_files("game")
+
+            if #lua_files > 0 then
+                for _, file in ipairs(lua_files) do
+                    os.exec("luacheck \"" .. file .. "\"")
+                end
+            else
+                print("  No Lua files found in game/")
+            end
         else
             print("  luacheck not found, install with: luarocks install luacheck")
         end
-        
+
         print("\nAll checks passed!")
     end)
     set_menu {
