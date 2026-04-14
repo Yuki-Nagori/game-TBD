@@ -1,0 +1,58 @@
+name: Build Linux
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@v1
+      with:
+        toolchain: stable
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libasound2-dev \
+          libudev-dev \
+          libxkbcommon-dev \
+          libwayland-dev \
+          libx11-dev \
+          libgl1-mesa-dev \
+          libgles2-mesa-dev \
+          libvulkan-dev \
+          libegl1-mesa-dev \
+          pkg-config
+    
+    - name: Install xmake
+      uses: xmake-io/github-action-setup-xmake@v1
+      with:
+        xmake-version: latest
+    
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          engine/target
+          ~/.xmake
+        key: ${{ runner.os }}-build-${{ hashFiles('engine/Cargo.lock', 'engine/Cargo.toml', 'xmake.lua') }}
+        restore-keys: |
+          ${{ runner.os }}-build-
+    
+    - name: Build
+      run: |
+        xmake f -m release
+        xmake b

@@ -6,8 +6,14 @@ set_project("ming-rpg")
 set_version("0.1.0")
 
 -- 模式设置（默认 releasedbg：release + debug info）
-add_rules("mode.debug", "mode.release")
+add_rules("mode.debug", "mode.release", "mode.releasedbg")
 set_defaultmode("releasedbg")
+
+-- 自定义 releasedbg 模式配置（release 优化 + 调试信息）
+if is_mode("releasedbg") then
+    set_optimize("fastest")    -- 最高优化级别
+    set_symbols("debug")       -- 包含调试信息
+end
 
 -- 添加自定义模式：releasedbg（release with debug info）
 -- 使用方式：xmake f -m releasedbg
@@ -112,28 +118,55 @@ target("ming-rpg")
         end
         local ext = is_plat("windows") and ".exe" or ""
         
-        -- 设置动态库路径（Rust std + bevy_dylib）
         local target_dir = path.absolute("engine/target/" .. build_dir)
         local deps_dir = path.join(target_dir, "deps")
         
-        -- 获取 Rust 工具链的 lib 目录（包含 libstd-*.so）
-        local rust_lib_dir = ""
-        local rustc_path = try {function () return os.iorunv("rustc", {"--print", "sysroot"}) end}
-        if rustc_path then
-            rust_lib_dir = path.join(rustc_path:trim(), "lib", "rustlib", "x86_64-unknown-linux-gnu", "lib")
+        -- 跨平台动态库路径设置
+        if is_plat("windows") then
+            -- Windows: 使用 PATH
+            local env_path = os.getenv("PATH") or ""
+            local new_path = target_dir .. ";" .. deps_dir
+            if env_path ~= "" then
+                new_path = new_path .. ";" .. env_path
+            end
+            os.setenv("PATH", new_path)
+        elseif is_plat("macosx") then
+            -- macOS: 使用 DYLD_LIBRARY_PATH
+            local env_dyld_path = os.getenv("DYLD_LIBRARY_PATH") or ""
+            local new_dyld_path = target_dir .. ":" .. deps_dir
+            if env_dyld_path ~= "" then
+                new_dyld_path = new_dyld_path .. ":" .. env_dyld_path
+            end
+            os.setenv("DYLD_LIBRARY_PATH", new_dyld_path)
+        else
+            -- Linux: 使用 LD_LIBRARY_PATH
+            -- 获取 Rust 工具链的 lib 目录（包含 libstd-*.so）
+            local rust_lib_dir = ""
+            local rustc_path = try {function () return os.iorunv("rustc", {"--print", "sysroot"}) end}
+            if rustc_path then
+                -- 获取当前 Rust 工具链的目标三重组
+                local rust_target = try {function () return os.iorunv("rustc", {"--print", "host"}) end}
+                if rust_target then
+                    rust_target = rust_target:trim()
+                    rust_lib_dir = path.join(rustc_path:trim(), "lib", "rustlib", rust_target, "lib")
+                else
+                    -- 回退到硬编码值（兼容旧版本）
+                    rust_lib_dir = path.join(rustc_path:trim(), "lib", "rustlib", "x86_64-unknown-linux-gnu", "lib")
+                end
+            end
+            
+            local env_ld_path = os.getenv("LD_LIBRARY_PATH") or ""
+            local new_ld_path = target_dir .. ":" .. deps_dir
+            if rust_lib_dir ~= "" then
+                new_ld_path = new_ld_path .. ":" .. rust_lib_dir
+            end
+            if env_ld_path ~= "" then
+                new_ld_path = new_ld_path .. ":" .. env_ld_path
+            end
+            os.setenv("LD_LIBRARY_PATH", new_ld_path)
         end
         
-        local env_ld_path = os.getenv("LD_LIBRARY_PATH") or ""
-        local new_ld_path = target_dir .. ":" .. deps_dir
-        if rust_lib_dir ~= "" then
-            new_ld_path = new_ld_path .. ":" .. rust_lib_dir
-        end
-        if env_ld_path ~= "" then
-            new_ld_path = new_ld_path .. ":" .. env_ld_path
-        end
-        
-        -- 设置环境变量并执行
-        os.setenv("LD_LIBRARY_PATH", new_ld_path)
+        -- 执行
         os.exec("\"" .. target_dir .. "/ming-rpg" .. ext .. "\"")
     end)
 
@@ -165,12 +198,20 @@ task_end()
 task("check")
     set_category("plugin")
     on_run(function ()
+        local mode = get_config("mode") or "releasedbg"
+        local mode_flag = ""
+        if mode == "release" then
+            mode_flag = "--release"
+        elseif mode == "releasedbg" then
+            mode_flag = "--profile releasedbg"
+        end
+
         print("=== Checking Rust code ===")
         print("Running clippy...")
-        os.exec("cargo clippy --manifest-path engine/Cargo.toml -- -D warnings")
+        os.exec("cargo clippy --manifest-path engine/Cargo.toml " .. mode_flag .. " --no-deps -- -D warnings")
         
         print("Running tests...")
-        os.exec("cargo test --manifest-path engine/Cargo.toml")
+        os.exec("cargo test --manifest-path engine/Cargo.toml " .. mode_flag)
         
         print("\n=== Checking Lua code ===")
         if try {function () return os.iorunv("which", {"luacheck"}) end} then
@@ -237,12 +278,9 @@ task("pack")
         end
         
         -- 2. Bevy 动态链接库
-        local dylib_pattern = path.absolute(target_dir .. "/deps/libbevy_dylib*.so")
-        if is_plat("windows") then
-            dylib_pattern = path.absolute(target_dir .. "/deps/bevy_dylib*.dll")
-        elseif is_plat("macosx") then
-            dylib_pattern = path.absolute(target_dir .. "/deps/libbevy_dylib*.dylib")
-        end
+        local dylib_ext = is_plat("windows") and ".dll" or (is_plat("macosx") and ".dylib" or ".so")
+        local dylib_prefix = is_plat("windows") and "" or "lib"
+        local dylib_pattern = path.absolute(target_dir .. "/deps/" .. dylib_prefix .. "bevy_dylib*" .. dylib_ext)
         
         local dylibs = os.files(dylib_pattern)
         for _, dylib in ipairs(dylibs) do
@@ -280,10 +318,13 @@ task("pack-mod")
         os.mkdir("build/mods/" .. mod_name)
         os.cp("game/*", "build/mods/" .. mod_name .. "/")
         
-        -- 打包为 zip
-        os.cd("build/mods")
-        os.exec("zip -r " .. mod_name .. ".zip " .. mod_name)
-        os.cd("../..")
+        -- 打包为 zip（跨平台）
+        local zip_path = "build/mods/" .. mod_name .. ".zip"
+        local dir_path = "build/mods/" .. mod_name
+        if os.exists(zip_path) then
+            os.rm(zip_path)
+        end
+        os.zip(zip_path, dir_path)
         
         print("Mod packed: build/mods/" .. mod_name .. ".zip")
     end)

@@ -1,8 +1,8 @@
 [package]
 name = "ming-rpg"
 version = "0.1.0"
-edition = "2021"
-authors = ["Yuki <your-email@example.com>"]
+edition = "2024"
+authors = ["Yuki 2622126521@qq.com"]
 description = "明朝修仙 RPG - 蝴蝶效应人生模拟"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/yourname/ming-rpg"
@@ -12,7 +12,7 @@ members = ["crates/*"]
 
 [dependencies]
 # 核心引擎框架
-bevy = { version = "0.13", features = ["dynamic_linking"] }
+bevy = "0.13"
 
 # Lua 绑定
 mlua = { version = "0.9", features = ["lua54", "vendored", "serialize"] }
@@ -50,6 +50,7 @@ opt-level = 3           # 依赖项全优化
 opt-level = 3
 lto = "thin"            # 链接时优化
 strip = true            # 去除符号表
+codegen-units = 16
 
 [profile.releasedbg]
 inherits = "release"
