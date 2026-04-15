@@ -137,25 +137,25 @@
 ### Phase 1: 基础框架 (Week 1-4)
 **目标**：跑通 Rust + Lua + Bevy 的最小可行版本
 
-- [ ] Week 1: 项目结构搭建
-  - [ ] xmake 配置 Rust + Lua 混合构建
-  - [ ] Cargo 工程初始化
-  - [ ] Lua 5.4 / LuaJIT 集成 (mlua crate)
+- [x] Week 1: 项目结构搭建
+  - [x] xmake 配置 Rust + Lua 混合构建
+  - [x] Cargo 工程初始化
+  - [x] Lua 5.4 / LuaJIT 集成 (mlua crate)
   
-- [ ] Week 2: Bevy 基础
-  - [ ] 窗口创建与事件循环
-  - [ ] 2D 渲染测试 (Sprite)
-  - [ ] 基础输入处理
+- [x] Week 2: Bevy 基础
+  - [x] 窗口创建与事件循环
+  - [x] 2D 渲染测试 (Sprite)
+  - [x] 基础输入处理
   
 - [ ] Week 3: Lua 绑定
-  - [ ] Rust ↔ Lua 双向调用
-  - [ ] 热重载机制 (开发时自动重载 Lua)
-  - [ ] 基础 API 暴露 (实体创建、组件操作)
+  - [x] Rust ↔ Lua 双向调用
+  - [x] 热重载机制 (开发时自动重载 Lua)
+  - [x] 基础 API 暴露 (实体创建、组件操作)
   
-- [ ] Week 4: MVP 演示
-  - [ ] Lua 控制一个方块移动
-  - [ ] 简单的 ECS 实体创建/销毁
-  - [ ] 资源加载 (图片、配置)
+- [x] Week 4: MVP 演示
+  - [x] Lua 控制一个方块移动
+  - [x] 简单的 ECS 实体创建/销毁
+  - [x] 资源加载 (图片、配置)
 
 **里程碑**：`cargo run` 后看到一个 Lua 控制的方块在窗口里动
 

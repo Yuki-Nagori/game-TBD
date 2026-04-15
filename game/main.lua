@@ -11,18 +11,37 @@ GAME_CONFIG = {
     time_scale = 1.0, -- 时间流速倍率
 }
 
+local elapsed = 0.0
+local spawned_entity_id = nil
+local removed_spawned_entity = false
+
 -- 初始化函数
 function init()
     log_info("游戏初始化中...")
 
-    -- TODO: 加载配置、初始化系统、创建起始场景
+    -- 基础 ECS API 演示：创建实体 + 添加组件
+    local spawned = Entity.create("npc")
+    spawned_entity_id = spawned.id
+    Entity.add_component(spawned_entity_id, "faction", { name = "锦衣卫", rank = 1 })
+    Entity.set_position(spawned_entity_id, -220.0, -120.0, 0.0)
 
     log_info("游戏初始化完成")
 end
 
 -- 主循环（每帧调用）
 function update(dt)
-    -- TODO: 更新游戏逻辑
+    elapsed = elapsed + dt
+
+    -- Lua 控制主角方块左右摆动（Week 4 MVP）
+    local x = math.sin(elapsed * 1.8) * 320.0
+    Entity.set_position("player", x, 0.0, 0.0)
+
+    -- ECS 创建/销毁演示：3秒后销毁 init 阶段创建的实体
+    if (not removed_spawned_entity) and elapsed > 3.0 and spawned_entity_id ~= nil then
+        Entity.destroy(spawned_entity_id)
+        removed_spawned_entity = true
+        log_info("已销毁测试实体: " .. spawned_entity_id)
+    end
 end
 
 -- 启动

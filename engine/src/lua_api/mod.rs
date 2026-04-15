@@ -3,19 +3,56 @@
 //! 负责 Rust 与 Lua 的交互，暴露游戏核心功能给脚本层
 //! 设计目标：为创意工坊 Mod 系统预留接口
 
-use mlua::{Lua, Result as LuaResult, Table, Value};
+use bevy::prelude::Vec3;
+use mlua::{FromLuaMulti, IntoLuaMulti, Lua, LuaSerdeExt, Result as LuaResult, Table, Value};
+use std::collections::HashMap;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 use tracing::{error, info, warn};
+
+#[derive(Debug, Clone)]
+pub enum LuaCommand {
+    CreateEntity {
+        id: String,
+        entity_type: String,
+    },
+    DestroyEntity {
+        id: String,
+    },
+    SetPosition {
+        id: String,
+        x: f32,
+        y: f32,
+        z: f32,
+    },
+    AddComponent {
+        id: String,
+        name: String,
+        value: serde_json::Value,
+    },
+    RemoveComponent {
+        id: String,
+        name: String,
+    },
+}
+
+#[derive(Default)]
+struct SharedState {
+    commands: Mutex<Vec<LuaCommand>>,
+    positions: Mutex<HashMap<String, [f32; 3]>>,
+}
 
 /// Lua 运行时封装
 pub struct LuaRuntime {
     lua: Lua,
+    shared: Arc<SharedState>,
 }
 
 impl LuaRuntime {
     /// 创建新的 Lua 运行时
     pub fn new() -> anyhow::Result<Self> {
         let lua = Lua::new();
+        let shared = Arc::new(SharedState::default());
 
         // 设置 Lua 标准库（限制版，为安全考虑）
         // TODO: 进一步限制，沙箱化
@@ -24,9 +61,9 @@ impl LuaRuntime {
         Self::register_core_api(&lua)?;
 
         // 注册 Mod API（为创意工坊预留）
-        Self::register_mod_api(&lua)?;
+        Self::register_mod_api(&lua, Arc::clone(&shared))?;
 
-        Ok(Self { lua })
+        Ok(Self { lua, shared })
     }
 
     /// 加载并执行 Lua 脚本
@@ -43,6 +80,43 @@ impl LuaRuntime {
 
         info!("脚本 {:?} 加载成功", path);
         Ok(())
+    }
+
+    /// 调用 Lua 全局函数
+    pub fn call_function<A, R>(&self, function_name: &str, args: A) -> anyhow::Result<R>
+    where
+        A: for<'lua> IntoLuaMulti<'lua>,
+        R: for<'lua> FromLuaMulti<'lua>,
+    {
+        let function: mlua::Function = self
+            .lua
+            .globals()
+            .get(function_name)
+            .map_err(|e| anyhow::anyhow!("获取 Lua 函数 {} 失败: {}", function_name, e))?;
+
+        function
+            .call(args)
+            .map_err(|e| anyhow::anyhow!("调用 Lua 函数 {} 失败: {}", function_name, e))
+    }
+
+    pub fn drain_commands(&self) -> Vec<LuaCommand> {
+        self.shared
+            .commands
+            .lock()
+            .map(|mut queue| std::mem::take(&mut *queue))
+            .unwrap_or_default()
+    }
+
+    pub fn update_entity_position(&self, id: &str, position: Vec3) {
+        if let Ok(mut positions) = self.shared.positions.lock() {
+            positions.insert(id.to_string(), [position.x, position.y, position.z]);
+        }
+    }
+
+    pub fn remove_entity_position(&self, id: &str) {
+        if let Ok(mut positions) = self.shared.positions.lock() {
+            positions.remove(id);
+        }
     }
 
     /// 加载 Mod（为创意工坊预留）
@@ -110,18 +184,94 @@ impl LuaRuntime {
     }
 
     /// 注册 Mod API（为创意工坊预留）
-    fn register_mod_api(lua: &Lua) -> LuaResult<()> {
+    fn register_mod_api(lua: &Lua, shared: Arc<SharedState>) -> LuaResult<()> {
         // Entity API
         let entity = lua.create_table()?;
+
+        let create_shared = Arc::clone(&shared);
         entity.set(
             "create",
-            lua.create_function(|lua, type_name: String| {
-                info!("[Mod API] 创建实体: {}", type_name);
-                // TODO: 实现实体创建
+            lua.create_function(move |lua, entity_type: String| {
+                let id = format!("entity_{}", uuid::Uuid::new_v4());
+                let command = LuaCommand::CreateEntity {
+                    id: id.clone(),
+                    entity_type: entity_type.clone(),
+                };
+
+                if let Ok(mut queue) = create_shared.commands.lock() {
+                    queue.push(command);
+                }
+
+                info!("[Mod API] 创建实体: {} ({})", entity_type, id);
                 let table = lua.create_table()?;
-                table.set("type", type_name)?;
-                table.set("id", format!("entity_{}", uuid::Uuid::new_v4()))?;
+                table.set("type", entity_type)?;
+                table.set("id", id)?;
                 Ok(table)
+            })?,
+        )?;
+
+        let destroy_shared = Arc::clone(&shared);
+        entity.set(
+            "destroy",
+            lua.create_function(move |_, id: String| {
+                if let Ok(mut queue) = destroy_shared.commands.lock() {
+                    queue.push(LuaCommand::DestroyEntity { id });
+                }
+                Ok(())
+            })?,
+        )?;
+
+        let set_pos_shared = Arc::clone(&shared);
+        entity.set(
+            "set_position",
+            lua.create_function(move |_, (id, x, y, z): (String, f32, f32, f32)| {
+                if let Ok(mut queue) = set_pos_shared.commands.lock() {
+                    queue.push(LuaCommand::SetPosition { id, x, y, z });
+                }
+                Ok(())
+            })?,
+        )?;
+
+        let get_pos_shared = Arc::clone(&shared);
+        entity.set(
+            "get_position",
+            lua.create_function(move |lua, id: String| {
+                let table = lua.create_table()?;
+                let default = [0.0_f32, 0.0_f32, 0.0_f32];
+                let position = get_pos_shared
+                    .positions
+                    .lock()
+                    .ok()
+                    .and_then(|positions| positions.get(&id).copied())
+                    .unwrap_or(default);
+
+                table.set("x", position[0])?;
+                table.set("y", position[1])?;
+                table.set("z", position[2])?;
+                Ok(table)
+            })?,
+        )?;
+
+        let add_comp_shared = Arc::clone(&shared);
+        entity.set(
+            "add_component",
+            lua.create_function(move |lua, (id, name, value): (String, String, Value)| {
+                let json_value = lua.from_value::<serde_json::Value>(value)?;
+                if let Ok(mut queue) = add_comp_shared.commands.lock() {
+                    queue.push(LuaCommand::AddComponent { id, name, value: json_value });
+                }
+                Ok(())
+            })?,
+        )?;
+
+        let remove_comp_shared = Arc::clone(&shared);
+        entity.set(
+            "remove_component",
+            lua.create_function(move |_, (id, name): (String, String)| {
+                if let Ok(mut queue) = remove_comp_shared.commands.lock() {
+                    queue.push(LuaCommand::RemoveComponent { id, name });
+                }
+                Ok(())
             })?,
         )?;
 
@@ -212,7 +362,81 @@ mod tests {
 
     #[test]
     fn test_core_api() {
-        let runtime = LuaRuntime::new().unwrap();
-        runtime.lua.load("log_info('测试日志')").exec().unwrap();
+        let runtime = LuaRuntime::new().expect("LuaRuntime::new should succeed");
+        runtime
+            .lua
+            .load("log_info('测试日志')")
+            .exec()
+            .expect("lua script should execute");
+    }
+
+    #[test]
+    fn test_call_lua_function() {
+        let runtime = LuaRuntime::new().expect("LuaRuntime::new should succeed");
+        runtime
+            .lua
+            .load(
+                r#"
+                function add(a, b)
+                    return a + b
+                end
+                "#,
+            )
+            .exec()
+            .expect("lua script should execute");
+
+        let result: i64 = runtime
+            .call_function("add", (2_i64, 3_i64))
+            .expect("call_function should succeed");
+        assert_eq!(result, 5);
+    }
+
+    #[test]
+    fn test_entity_api_queue_command() {
+        let runtime = LuaRuntime::new().expect("LuaRuntime::new should succeed");
+        runtime
+            .lua
+            .load("Entity.set_position('player', 12.0, 8.0, 0.0)")
+            .exec()
+            .expect("lua script should execute");
+
+        let commands = runtime.drain_commands();
+        assert_eq!(commands.len(), 1);
+        match &commands[0] {
+            LuaCommand::SetPosition { id, x, y, z } => {
+                assert_eq!(id, "player");
+                assert_eq!((*x, *y, *z), (12.0, 8.0, 0.0));
+            }
+            other => panic!("unexpected command: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_entity_position_cache_clear() {
+        let runtime = LuaRuntime::new().expect("LuaRuntime::new should succeed");
+        runtime
+            .lua
+            .load(
+                r#"
+                function read_pos(id)
+                    local pos = Entity.get_position(id)
+                    return pos.x, pos.y, pos.z
+                end
+                "#,
+            )
+            .exec()
+            .expect("lua script should execute");
+
+        runtime.update_entity_position("temp_entity", Vec3::new(3.0, 4.0, 5.0));
+        let before: (f32, f32, f32) = runtime
+            .call_function("read_pos", "temp_entity")
+            .expect("call_function should succeed");
+        assert_eq!(before, (3.0, 4.0, 5.0));
+
+        runtime.remove_entity_position("temp_entity");
+        let after: (f32, f32, f32) = runtime
+            .call_function("read_pos", "temp_entity")
+            .expect("call_function should succeed");
+        assert_eq!(after, (0.0, 0.0, 0.0));
     }
 }
