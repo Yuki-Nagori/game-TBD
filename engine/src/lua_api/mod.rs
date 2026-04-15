@@ -113,6 +113,12 @@ impl LuaRuntime {
         }
     }
 
+    pub fn remove_entity_position(&self, id: &str) {
+        if let Ok(mut positions) = self.shared.positions.lock() {
+            positions.remove(id);
+        }
+    }
+
     /// 加载 Mod（为创意工坊预留）
     #[allow(dead_code)]
     pub fn load_mod<P: AsRef<Path>>(&self, mod_path: P) -> anyhow::Result<()> {
@@ -220,12 +226,7 @@ impl LuaRuntime {
             "set_position",
             lua.create_function(move |_, (id, x, y, z): (String, f32, f32, f32)| {
                 if let Ok(mut queue) = set_pos_shared.commands.lock() {
-                    queue.push(LuaCommand::SetPosition {
-                        id,
-                        x,
-                        y,
-                        z,
-                    });
+                    queue.push(LuaCommand::SetPosition { id, x, y, z });
                 }
                 Ok(())
             })?,
@@ -257,11 +258,7 @@ impl LuaRuntime {
             lua.create_function(move |lua, (id, name, value): (String, String, Value)| {
                 let json_value = lua.from_value::<serde_json::Value>(value)?;
                 if let Ok(mut queue) = add_comp_shared.commands.lock() {
-                    queue.push(LuaCommand::AddComponent {
-                        id,
-                        name,
-                        value: json_value,
-                    });
+                    queue.push(LuaCommand::AddComponent { id, name, value: json_value });
                 }
                 Ok(())
             })?,
@@ -412,5 +409,34 @@ mod tests {
             }
             other => panic!("unexpected command: {:?}", other),
         }
+    }
+
+    #[test]
+    fn test_entity_position_cache_clear() {
+        let runtime = LuaRuntime::new().expect("LuaRuntime::new should succeed");
+        runtime
+            .lua
+            .load(
+                r#"
+                function read_pos(id)
+                    local pos = Entity.get_position(id)
+                    return pos.x, pos.y, pos.z
+                end
+                "#,
+            )
+            .exec()
+            .expect("lua script should execute");
+
+        runtime.update_entity_position("temp_entity", Vec3::new(3.0, 4.0, 5.0));
+        let before: (f32, f32, f32) = runtime
+            .call_function("read_pos", "temp_entity")
+            .expect("call_function should succeed");
+        assert_eq!(before, (3.0, 4.0, 5.0));
+
+        runtime.remove_entity_position("temp_entity");
+        let after: (f32, f32, f32) = runtime
+            .call_function("read_pos", "temp_entity")
+            .expect("call_function should succeed");
+        assert_eq!(after, (0.0, 0.0, 0.0));
     }
 }

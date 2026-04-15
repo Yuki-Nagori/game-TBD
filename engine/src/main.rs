@@ -213,6 +213,7 @@ fn apply_lua_commands_system(
                 info!("Lua 创建实体成功: {}", id);
             }
             LuaCommand::DestroyEntity { id } => {
+                lua.remove_entity_position(&id);
                 if let Some(entity) = registry.by_id.remove(&id) {
                     commands.entity(entity).despawn_recursive();
                     registry.components.remove(&id);
