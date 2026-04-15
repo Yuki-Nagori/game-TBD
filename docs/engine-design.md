@@ -102,7 +102,7 @@ pub struct HotReloadSystem {
 ```toml
 [dependencies]
 bevy = "0.13"           # ECS 游戏引擎
-mlua = { version = "0.9", features = ["luajit"] }  # Lua 绑定
+mlua = { version = "0.9", features = ["lua54"] }  # Lua 5.4 绑定
 anyhow = "1.0"          # 错误处理
 tracing = "0.1"         # 日志
 serde = { version = "1.0", features = ["derive"] }  # 序列化
