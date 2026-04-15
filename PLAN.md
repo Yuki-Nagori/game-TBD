@@ -88,6 +88,7 @@
 ├── docs/                    # 文档
 │   ├── engine-design.md     # 引擎技术实现
 │   ├── lua-api.md           # Lua 接口规范
+│   ├── MOD_API.md           # Mod 沙箱接口规范
 │   ├── mod-system.md        # Mod 架构设计
 │   └── template-system.md   # 创作工具（Phase 4 后）
 │
@@ -252,7 +253,7 @@
 
 ---
 
-### Phase 5: 打磨与发布 (Week 41+)
+### Phase 6: 打磨与发布 (Week 41+)
 **目标**：Steam/itch.io 发布准备
 
 - [ ] 性能优化
