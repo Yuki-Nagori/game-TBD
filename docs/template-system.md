@@ -252,6 +252,9 @@ def validate(path):
     return True
 
 if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        print("Usage: validate-mod-json.py <path_to_mod.json>")
+        sys.exit(1)
     sys.exit(0 if validate(sys.argv[1]) else 1)
 ```
 

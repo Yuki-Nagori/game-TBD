@@ -230,11 +230,11 @@ CREATE TABLE achievements (
 
 ```rust
 // 高性能事件日志
-let event_log = keyspace.open_partition("events", ...)?;
-event_log.insert(timestamp, event_data).await?;
+let event_log = keyspace.open_partition("events", PartitionCreateOptions::default())?;
+event_log.insert(timestamp, event_data)?;
 
 // 临时缓存（如战斗中的伤害统计）
-let combat_cache = keyspace.open_partition("combat", ...)?;
+let combat_cache = keyspace.open_partition("combat", PartitionCreateOptions::default())?;
 ```
 
 ### 存档目录

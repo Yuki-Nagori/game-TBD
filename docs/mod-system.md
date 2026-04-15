@@ -190,9 +190,9 @@ end)
 
 ### 参考模板
 
-- [明朝修仙剧本模板](./templates/ming-xiuxian.md)
-- [基督山伯爵改编指南](./templates/count-of-monte-cristo.md)
-- [原创剧本最佳实践](./templates/best-practices.md)
+- 明朝修仙剧本模板 (Phase 4 后添加)
+- 基督山伯爵改编指南 (Phase 4 后添加)
+- 原创剧本最佳实践 (Phase 4 后添加)
 
 ## 引擎与剧本的边界
 
