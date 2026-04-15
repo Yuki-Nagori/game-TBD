@@ -215,7 +215,7 @@ impl LuaRuntime {
             "destroy",
             lua.create_function(move |_, id: String| {
                 if let Ok(mut queue) = destroy_shared.commands.lock() {
-                    queue.push(LuaCommand::DestroyEntity { id: id.clone() });
+                    queue.push(LuaCommand::DestroyEntity { id });
                 }
                 Ok(())
             })?,

@@ -107,7 +107,8 @@ fn main() -> anyhow::Result<()> {
                 apply_lua_commands_system,
                 sync_entity_positions_to_lua_system,
                 hot_reload_lua_script_system,
-            ),
+            )
+                .chain(),
         )
         .run();
 
@@ -259,6 +260,8 @@ fn sync_entity_positions_to_lua_system(
 
 fn hot_reload_lua_script_system(
     time: Res<Time>,
+    mut commands: Commands,
+    mut registry: ResMut<EntityRegistry>,
     lua: NonSend<LuaRuntime>,
     mut hot_reload: ResMut<ScriptHotReload>,
 ) {
@@ -272,6 +275,21 @@ fn hot_reload_lua_script_system(
 
     if current_modified <= hot_reload.last_modified {
         return;
+    }
+
+    // before calling lua.load_main_script, clean up script-managed entities
+    let ids_to_remove: Vec<String> = registry
+        .by_id
+        .keys()
+        .filter(|id| id.as_str() != PLAYER_ID)
+        .cloned()
+        .collect();
+    for id in ids_to_remove {
+        if let Some(entity) = registry.by_id.remove(&id) {
+            commands.entity(entity).despawn_recursive();
+            registry.components.remove(&id);
+        }
+        lua.remove_entity_position(&id);
     }
 
     match lua.load_main_script(&hot_reload.script_path) {
