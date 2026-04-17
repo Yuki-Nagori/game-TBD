@@ -12,7 +12,7 @@ members = ["crates/*"]
 
 [dependencies]
 # 核心引擎框架
-bevy = "0.13"
+bevy = { version = "0.13", features = ["png", "jpeg", "webp"] }
 
 # 3D 物理
 bevy_rapier3d = "0.26"

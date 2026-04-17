@@ -1,0 +1,11 @@
+Model Information:
+* title:	Fox-Eared, game Endfield
+* source:	https://sketchfab.com/3d-models/fox-eared-game-endfield-86fc4b4de2524643882523ddc75a8025
+* author:	Zonar (https://sketchfab.com/Zonar)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Fox-Eared, game Endfield" (https://sketchfab.com/3d-models/fox-eared-game-endfield-86fc4b4de2524643882523ddc75a8025) by Zonar (https://sketchfab.com/Zonar) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

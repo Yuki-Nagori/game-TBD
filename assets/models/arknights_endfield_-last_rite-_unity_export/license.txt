@@ -1,0 +1,11 @@
+Model Information:
+* title:	[Arknights: Endfield] -Last Rite- (Unity Export)
+* source:	https://sketchfab.com/3d-models/arknights-endfield-last-rite-unity-export-f611357f164e40968423557c2b661594
+* author:	VuckyZ (https://sketchfab.com/VuckyZ123)
+
+Model License:
+* license type:	CC-BY-NC-SA-4.0 (http://creativecommons.org/licenses/by-nc-sa/4.0/)
+* requirements:	Author must be credited. No commercial use. Modified versions must have the same license.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "[Arknights: Endfield] -Last Rite- (Unity Export)" (https://sketchfab.com/3d-models/arknights-endfield-last-rite-unity-export-f611357f164e40968423557c2b661594) by VuckyZ (https://sketchfab.com/VuckyZ123) licensed under CC-BY-NC-SA-4.0 (http://creativecommons.org/licenses/by-nc-sa/4.0/)
