@@ -270,11 +270,6 @@ pub fn player_input_system(
 
             // 更新人物朝向为移动方向
             motion.facing_yaw = direction.x.atan2(direction.z) + runtime_config.player.yaw_offset;
-        } else {
-            // 停止时逐渐减速
-            let damping = 10.0 * time.delta_seconds();
-            velocity.linvel.x *= (1.0 - damping).max(0.0);
-            velocity.linvel.z *= (1.0 - damping).max(0.0);
         }
 
         // 始终应用人物朝向（平滑旋转）

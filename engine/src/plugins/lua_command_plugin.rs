@@ -26,7 +26,8 @@ impl Plugin for LuaCommandPlugin {
                     apply_lua_commands_system,
                     sync_entity_positions_to_lua_system,
                     hot_reload_lua_script_system,
-                ),
+                )
+                    .chain(),
             );
     }
 }
