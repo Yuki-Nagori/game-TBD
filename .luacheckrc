@@ -11,7 +11,7 @@ exclude_files = {
     ".git/",
 }
 
--- 全局变量（由 Rust 注入）
+-- 全局变量（由 Rust 注入或由 main.lua 导出供 Rust 读取）
 globals = {
     "Engine",
     "Entity",
@@ -20,6 +20,12 @@ globals = {
     "Log",
     "log_info",
     "GAME_CONFIG",
+    "PLAYER_CONFIG",
+    "PLAYER_MOVEMENT",
+    "WALK_ANIMATION",
+    "CAMERA_CONFIG",
+    "SCENE_COLORS",
+    "SCENE_CONFIG",
     "init",
     "update",
 }
