@@ -32,9 +32,9 @@ end
 function update(dt)
     elapsed = elapsed + dt
 
-    -- Lua 控制主角方块左右摆动（Week 4 MVP）
-    local x = math.sin(elapsed * 1.8) * 320.0
-    Entity.set_position("player", x, 0.0, 0.0)
+    -- Lua 控制主角方块左右摆动（Week 4 MVP） - 暂时禁用，由玩家输入控制
+    -- local x = math.sin(elapsed * 1.8) * 320.0
+    -- Entity.set_position("player", x, 0.0, 0.0)
 
     -- ECS 创建/销毁演示：3秒后销毁 init 阶段创建的实体
     if (not removed_spawned_entity) and elapsed > 3.0 and spawned_entity_id ~= nil then
