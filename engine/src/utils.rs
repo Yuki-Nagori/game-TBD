@@ -13,9 +13,9 @@ pub fn resolve_asset_root() -> String {
 
     let candidates = [
         PathBuf::from("assets"),
-        PathBuf::from("..\\assets"),
-        PathBuf::from("..\\..\\assets"),
-        PathBuf::from("..\\..\\..\\assets"),
+        PathBuf::from("..").join("assets"),
+        PathBuf::from("..").join("..").join("assets"),
+        PathBuf::from("..").join("..").join("..").join("assets"),
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("..")
             .join("assets"),

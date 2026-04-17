@@ -39,7 +39,10 @@ fn spawn_player(
         .insert(PlaceholderWalkAnimation::new(PLAYER_BASE_HEIGHT))
         // 物理组件
         .insert(RigidBody::KinematicPositionBased)
-        .insert(Collider::capsule_y(0.9, 0.35))
+        .insert(Collider::capsule_y(
+            PLAYER_COLLIDER_HEIGHT,
+            PLAYER_COLLIDER_RADIUS,
+        ))
         .insert(KinematicCharacterController::default())
         .id();
 
@@ -94,7 +97,7 @@ pub fn player_input_system(
         let r = camera_transform.rotation * Vec3::X;
         Vec3::new(r.x, 0.0, r.z).normalize_or_zero()
     };
-    let direction = (camera_forward * input.y - camera_right * input.x).normalize_or_zero();
+    let direction = (camera_forward * input.y + camera_right * input.x).normalize_or_zero();
 
     let is_moving = direction != Vec3::ZERO;
 

@@ -10,7 +10,10 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 
 use crate::components::{Player, ThirdPersonCamera};
-use crate::constants::*;
+use crate::constants::{
+    CAMERA_DISTANCE, CAMERA_EDGE_THRESHOLD, CAMERA_MOUSE_FOLLOW_SPEED, CAMERA_PITCH_MAX,
+    CAMERA_PITCH_MIN, CAMERA_SMOOTH_FACTOR,
+};
 use crate::resources::CameraState;
 
 pub struct CameraPlugin;
@@ -57,9 +60,9 @@ fn camera_mouse_follow_system(
     let center = window_size / 2.0;
     let delta = cursor_pos - center;
 
-    // 定义边缘区域（屏幕边缘 20% 区域触发旋转）
-    let edge_threshold_x = window_size.x * 0.3;
-    let edge_threshold_y = window_size.y * 0.3;
+    // 定义边缘区域（屏幕边缘区域触发旋转）
+    let edge_threshold_x = window_size.x * CAMERA_EDGE_THRESHOLD;
+    let edge_threshold_y = window_size.y * CAMERA_EDGE_THRESHOLD;
 
     // 水平旋转
     if delta.x.abs() > edge_threshold_x {

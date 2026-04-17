@@ -3,22 +3,26 @@
 //! 集中管理所有游戏参数，方便调整平衡性
 
 use bevy::prelude::Color;
-use std::f32::consts::PI;
 
 // 玩家相关
 pub const PLAYER_SPEED: f32 = 5.0;
 pub const PLAYER_ID: &str = "player";
 pub const PLAYER_MODEL_SCENE: &str = "models/zhuang_fangyi__arknights_endfield/scene.gltf#Scene0";
-pub const PLAYER_MODEL_YAW_OFFSET: f32 = PI;
+pub const PLAYER_MODEL_YAW_OFFSET: f32 = 0.0;
 pub const PLAYER_MODEL_SCALE: f32 = 1.0;
 pub const PLAYER_BASE_HEIGHT: f32 = 0.0;
+
+// 玩家碰撞体尺寸
+pub const PLAYER_COLLIDER_RADIUS: f32 = 0.35;
+pub const PLAYER_COLLIDER_HEIGHT: f32 = 0.9;
 
 // 相机相关
 pub const CAMERA_DISTANCE: f32 = 20.0;
 pub const CAMERA_SMOOTH_FACTOR: f32 = 0.1;
 pub const CAMERA_PITCH_MIN: f32 = 10.0f32.to_radians();
 pub const CAMERA_PITCH_MAX: f32 = 80.0f32.to_radians();
-pub const CAMERA_MOUSE_FOLLOW_SPEED: f32 = 1.5; // 鼠标跟随旋转速度（弧度/秒）
+pub const CAMERA_MOUSE_FOLLOW_SPEED: f32 = 2.0; // 鼠标跟随旋转速度（弧度/秒）
+pub const CAMERA_EDGE_THRESHOLD: f32 = 0.15; // 边缘触发区域比例（15%）
 
 // 动画相关
 pub const WALK_BOB_AMPLITUDE: f32 = 0.08;
