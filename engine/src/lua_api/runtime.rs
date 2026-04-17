@@ -96,20 +96,15 @@ impl LuaRuntime {
             .map_err(|e| anyhow::anyhow!("{}", e))
     }
 
-    /// 调用 Lua 全局函数
+    /// 调用 Lua 全局函数（仅支持 f32 参数和 () 返回值）
     ///
     /// 示例:
     /// ```rust,ignore
-    /// runtime.call_function::<f32, ()>("update", 0.016f32)?;
+    /// runtime.call_function("update", 0.016f32)?;
     /// ```
-    pub fn call_function<A, R>(&self, function_name: &str, args: A) -> anyhow::Result<R>
-    where
-        A: serde::Serialize,
-        R: for<'de> serde::Deserialize<'de>,
-    {
-        // 直接使用 bincode 序列化参数（类型安全）
+    pub fn call_function(&self, function_name: &str, arg: f32) -> anyhow::Result<()> {
         let args_bytes =
-            bincode::serialize(&args).map_err(|e| anyhow::anyhow!("序列化参数失败: {}", e))?;
+            bincode::serialize(&arg).map_err(|e| anyhow::anyhow!("序列化参数失败: {}", e))?;
 
         let (tx, rx) = channel();
 
@@ -121,13 +116,11 @@ impl LuaRuntime {
             })
             .map_err(|e| anyhow::anyhow!("发送请求失败: {}", e))?;
 
-        let result_bytes = rx
-            .recv()
+        rx.recv()
             .map_err(|e| anyhow::anyhow!("接收响应失败: {}", e))?
             .map_err(|e| anyhow::anyhow!("{}", e))?;
 
-        // 直接反序列化为目标类型
-        bincode::deserialize(&result_bytes).map_err(|e| anyhow::anyhow!("反序列化结果失败: {}", e))
+        Ok(())
     }
 
     /// 从 Lua 全局表读取配置
@@ -195,7 +188,7 @@ impl LuaActor {
 
         // 注册核心 API
         Self::register_core_api(&lua)?;
-        Self::register_mod_api(&lua, Arc::clone(&command_queue))?;
+        Self::register_mod_api(&lua, Arc::clone(&command_queue), Arc::clone(&positions))?;
 
         Ok(Self { lua, command_queue, positions })
     }
@@ -334,7 +327,11 @@ impl LuaActor {
         Ok(())
     }
 
-    fn register_mod_api(lua: &Lua, command_queue: Arc<Mutex<Vec<LuaCommand>>>) -> LuaResult<()> {
+    fn register_mod_api(
+        lua: &Lua,
+        command_queue: Arc<Mutex<Vec<LuaCommand>>>,
+        positions: Arc<Mutex<HashMap<String, [f32; 3]>>>,
+    ) -> LuaResult<()> {
         // Entity API
         let entity = lua.create_table()?;
 
@@ -382,16 +379,19 @@ impl LuaActor {
             })?,
         )?;
 
-        let get_pos_queue = Arc::clone(&command_queue);
+        let get_pos_map = Arc::clone(&positions);
         entity.set(
             "get_position",
-            lua.create_function(move |lua, _id: String| {
+            lua.create_function(move |lua, id: String| {
                 let table = lua.create_table()?;
-                // 注意：这里简化处理，实际应该查询 positions map
-                table.set("x", 0.0f32)?;
-                table.set("y", 0.0f32)?;
-                table.set("z", 0.0f32)?;
-                let _ = get_pos_queue; // 使用变量避免警告
+                let pos = get_pos_map
+                    .lock()
+                    .ok()
+                    .and_then(|m| m.get(&id).copied())
+                    .unwrap_or([0.0, 0.0, 0.0]);
+                table.set("x", pos[0])?;
+                table.set("y", pos[1])?;
+                table.set("z", pos[2])?;
                 Ok(table)
             })?,
         )?;

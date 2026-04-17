@@ -36,7 +36,7 @@ impl Plugin for LuaCommandPlugin {
 fn lua_update_system(lua: Res<LuaRuntime>, time: Res<Time>) {
     use tracing::error;
 
-    if let Err(err) = lua.call_function::<_, ()>("update", time.delta_seconds()) {
+    if let Err(err) = lua.call_function("update", time.delta_seconds()) {
         error!("Lua update 调用失败: {}", err);
     }
 }

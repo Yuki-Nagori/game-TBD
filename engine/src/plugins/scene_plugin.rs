@@ -137,11 +137,12 @@ fn load_scene_config(lua: Res<LuaRuntime>, mut current_scene: ResMut<CurrentScen
     }
 }
 
-/// 生成场景：地面、光照、方块建筑占位
+/// 生成场景：地面、光照、场景对象
 fn spawn_scene(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    current_scene: Res<CurrentScene>,
 ) {
     info!("初始化 3D 场景");
 
@@ -167,8 +168,52 @@ fn spawn_scene(
         Collider::cuboid(GROUND_SIZE / 2.0, 0.1, GROUND_SIZE / 2.0),
     ));
 
-    // 方块建筑系统：简单建筑占位
-    spawn_building_blocks(&mut commands, &mut meshes, &mut materials);
+    // 从场景配置生成对象
+    for obj in &current_scene.config.objects {
+        match obj.r#type.as_str() {
+            "building" => {
+                let color = match obj.color.as_deref() {
+                    Some("wall") => WALL_COLOR,
+                    Some("roof") => ROOF_COLOR,
+                    _ => WALL_COLOR,
+                };
+                let mesh = meshes.add(Cuboid::new(WALL_SIZE, WALL_SIZE, WALL_SIZE));
+                commands.spawn((
+                    PbrBundle {
+                        mesh,
+                        material: materials.add(color),
+                        transform: Transform::from_translation(Vec3::new(
+                            obj.x,
+                            WALL_SIZE / 2.0,
+                            obj.z,
+                        )),
+                        ..default()
+                    },
+                    Collider::cuboid(WALL_SIZE / 2.0, WALL_SIZE / 2.0, WALL_SIZE / 2.0),
+                ));
+            }
+            "tree" => {
+                let mesh = meshes.add(Cuboid::new(TREE_SIZE, TREE_SIZE * 2.0, TREE_SIZE));
+                commands.spawn((
+                    PbrBundle {
+                        mesh,
+                        material: materials.add(TREE_COLOR),
+                        transform: Transform::from_translation(Vec3::new(obj.x, TREE_SIZE, obj.z)),
+                        ..default()
+                    },
+                    Collider::cuboid(TREE_SIZE / 2.0, TREE_SIZE, TREE_SIZE / 2.0),
+                ));
+            }
+            _ => {
+                warn!("未知的场景对象类型: {}", obj.r#type);
+            }
+        }
+    }
+
+    // 默认建筑（当配置为空时作为后备）
+    if current_scene.config.objects.is_empty() {
+        spawn_building_blocks(&mut commands, &mut meshes, &mut materials);
+    }
 
     info!("场景创建完成");
 }
@@ -190,15 +235,9 @@ fn check_scene_switch_system(
     for connection in &current_scene.config.connections {
         let distance = Vec2::new(player_pos.x - connection.x, player_pos.z - connection.z).length();
 
-        // 如果接近切换点（2米内），显示提示
-        if distance < 2.0 {
-            // TODO: 显示 UI 提示，允许玩家按键切换场景
-            // 目前只是记录日志
-            info!(
-                "接近场景切换点: {} -> {} (按 F 切换)",
-                current_scene.config.name, connection.name
-            );
-        }
+        // TODO: 显示 UI 提示，允许玩家按键切换场景
+        // 避免每帧记录日志造成性能问题
+        let _ = distance;
     }
 }
 

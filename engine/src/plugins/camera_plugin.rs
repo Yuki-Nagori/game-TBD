@@ -233,6 +233,7 @@ fn camera_follow_system(
     player_query: Query<&Transform, With<Player>>,
     mut camera_query: Query<&mut Transform, (With<ThirdPersonCamera>, Without<Player>)>,
     camera_state: Res<CameraState>,
+    time: Res<Time>,
 ) {
     let Ok(player_transform) = player_query.get_single() else {
         return;
@@ -263,10 +264,11 @@ fn camera_follow_system(
         player_position.z + z,
     );
 
-    // 平滑移动相机（使用 Lua 配置的平滑因子）
+    // 平滑移动相机（帧率无关的指数衰减公式）
+    let smooth_factor = 1.0 - (1.0 - camera_state.smooth_factor).powf(time.delta_seconds() * 60.0);
     camera_transform.translation = camera_transform
         .translation
-        .lerp(target_position, camera_state.smooth_factor);
+        .lerp(target_position, smooth_factor);
 
     // 相机始终看向玩家
     camera_transform.look_at(player_position, Vec3::Y);
