@@ -2,8 +2,6 @@
 //!
 //! 技术限制和默认值，游戏性配置请使用 Lua 配置
 
-use bevy::prelude::Color;
-
 // 内部标识（硬编码，不可配置）
 pub const PLAYER_ID: &str = "player";
 
@@ -43,11 +41,6 @@ pub const ROTATION_SPEED: f32 = 10.0;
 pub const WALL_SIZE: f32 = 2.0;
 pub const ROOF_SIZE: f32 = 2.2;
 pub const TREE_SIZE: f32 = 1.5;
-
-pub const WALL_COLOR: Color = Color::rgb(0.86, 0.24, 0.18);
-pub const ROOF_COLOR: Color = Color::rgb(0.9, 0.8, 0.1);
-pub const TREE_COLOR: Color = Color::rgb(0.2, 0.6, 0.2);
-pub const GROUND_COLOR: Color = Color::rgb(0.3, 0.3, 0.3);
 
 // 热重载
 pub const HOT_RELOAD_INTERVAL: f32 = 0.5;

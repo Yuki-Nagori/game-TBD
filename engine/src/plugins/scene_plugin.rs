@@ -12,6 +12,39 @@ use crate::constants::*;
 use crate::lua_api::LuaRuntime;
 use crate::resources::EntityRegistry;
 
+/// 场景颜色配置（从 Lua 读取）
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct SceneColorsConfig {
+    pub wall: ColorRgb,
+    pub roof: ColorRgb,
+    pub tree: ColorRgb,
+    pub ground: ColorRgb,
+}
+
+impl Default for SceneColorsConfig {
+    fn default() -> Self {
+        Self {
+            wall: ColorRgb { r: 0.86, g: 0.24, b: 0.18 },
+            roof: ColorRgb { r: 0.9, g: 0.8, b: 0.1 },
+            tree: ColorRgb { r: 0.2, g: 0.6, b: 0.2 },
+            ground: ColorRgb { r: 0.3, g: 0.3, b: 0.3 },
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct ColorRgb {
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
+}
+
+impl From<ColorRgb> for Color {
+    fn from(c: ColorRgb) -> Self {
+        Color::rgb(c.r, c.g, c.b)
+    }
+}
+
 /// 场景对象配置
 #[derive(Debug, Clone, serde::Deserialize)]
 #[allow(dead_code)]
@@ -107,23 +140,41 @@ impl Default for CurrentScene {
     }
 }
 
+/// 运行时颜色配置资源
+#[derive(Resource, Default)]
+pub struct SceneColorRes {
+    pub colors: SceneColorsConfig,
+}
+
 pub struct ScenePlugin;
 
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<EntityRegistry>()
             .init_resource::<CurrentScene>()
+            .init_resource::<SceneColorRes>()
             .add_systems(Startup, (load_scene_config, spawn_scene).chain())
             .add_systems(Update, check_scene_switch_system);
     }
 }
 
 /// 加载场景配置
-fn load_scene_config(lua: Res<LuaRuntime>, mut current_scene: ResMut<CurrentScene>) {
+fn load_scene_config(
+    lua: Res<LuaRuntime>,
+    mut current_scene: ResMut<CurrentScene>,
+    mut scene_colors: ResMut<SceneColorRes>,
+) {
     let scenes_config: ScenesConfig = lua.get_config("SCENE_CONFIG").unwrap_or_else(|| {
         info!("使用默认场景配置");
         ScenesConfig::default()
     });
+
+    // 加载颜色配置
+    let colors_config: SceneColorsConfig = lua.get_config("SCENE_COLORS").unwrap_or_else(|| {
+        info!("使用默认场景颜色配置");
+        SceneColorsConfig::default()
+    });
+    scene_colors.colors = colors_config;
 
     info!("场景配置加载完成，当前场景: {}", scenes_config.current);
 
@@ -143,6 +194,7 @@ fn spawn_scene(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     current_scene: Res<CurrentScene>,
+    scene_colors: Res<SceneColorRes>,
 ) {
     info!("初始化 3D 场景");
 
@@ -157,26 +209,32 @@ fn spawn_scene(
         ..default()
     });
 
-    // 地面（带碰撞）
+    // 地面（带碰撞）：向下偏移使碰撞体顶面与视觉平面对齐
     let ground_size = current_scene.config.ground_size;
+    let ground_color: Color = scene_colors.colors.ground.clone().into();
     let ground_mesh = meshes.add(Plane3d::default().mesh().size(ground_size, ground_size));
     commands.spawn((
         PbrBundle {
             mesh: ground_mesh,
-            material: materials.add(GROUND_COLOR),
+            material: materials.add(ground_color),
+            transform: Transform::from_xyz(0.0, -0.1, 0.0),
             ..default()
         },
         Collider::cuboid(ground_size / 2.0, 0.1, ground_size / 2.0),
     ));
 
     // 从场景配置生成对象
+    let wall_color: Color = scene_colors.colors.wall.clone().into();
+    let roof_color: Color = scene_colors.colors.roof.clone().into();
+    let tree_color: Color = scene_colors.colors.tree.clone().into();
+
     for obj in &current_scene.config.objects {
         match obj.r#type.as_str() {
             "building" => {
                 let color = match obj.color.as_deref() {
-                    Some("wall") => WALL_COLOR,
-                    Some("roof") => ROOF_COLOR,
-                    _ => WALL_COLOR,
+                    Some("wall") => wall_color,
+                    Some("roof") => roof_color,
+                    _ => wall_color,
                 };
                 let mesh = meshes.add(Cuboid::new(WALL_SIZE, WALL_SIZE, WALL_SIZE));
                 commands.spawn((
@@ -198,7 +256,7 @@ fn spawn_scene(
                 commands.spawn((
                     PbrBundle {
                         mesh,
-                        material: materials.add(TREE_COLOR),
+                        material: materials.add(tree_color),
                         transform: Transform::from_translation(Vec3::new(obj.x, TREE_SIZE, obj.z)),
                         ..default()
                     },
@@ -213,7 +271,12 @@ fn spawn_scene(
 
     // 默认建筑（当配置为空时作为后备）
     if current_scene.config.objects.is_empty() {
-        spawn_building_blocks(&mut commands, &mut meshes, &mut materials);
+        spawn_building_blocks(
+            &mut commands,
+            &mut meshes,
+            &mut materials,
+            &scene_colors.colors,
+        );
     }
 
     info!("场景创建完成");
@@ -247,12 +310,17 @@ fn spawn_building_blocks(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
+    colors: &SceneColorsConfig,
 ) {
+    let wall_color: Color = colors.wall.clone().into();
+    let roof_color: Color = colors.roof.clone().into();
+    let tree_color: Color = colors.tree.clone().into();
+
     let wall_mesh = meshes.add(Cuboid::new(WALL_SIZE, WALL_SIZE, WALL_SIZE));
     let roof_mesh = meshes.add(Cuboid::new(ROOF_SIZE, ROOF_SIZE / 2.0, ROOF_SIZE));
     let tree_mesh = meshes.add(Cuboid::new(TREE_SIZE, TREE_SIZE * 2.0, TREE_SIZE));
 
-    // 红色墙面（四个方块围成方形）
+    // 墙面
     let wall_positions = [
         Vec3::new(8.0, WALL_SIZE / 2.0, 0.0),
         Vec3::new(-8.0, WALL_SIZE / 2.0, 0.0),
@@ -263,7 +331,7 @@ fn spawn_building_blocks(
         commands.spawn((
             PbrBundle {
                 mesh: wall_mesh.clone(),
-                material: materials.add(WALL_COLOR),
+                material: materials.add(wall_color),
                 transform: Transform::from_translation(pos),
                 ..default()
             },
@@ -271,11 +339,11 @@ fn spawn_building_blocks(
         ));
     }
 
-    // 黄色屋顶 - 移动到角落作为独立小亭
+    // 屋顶
     commands.spawn((
         PbrBundle {
             mesh: roof_mesh,
-            material: materials.add(ROOF_COLOR),
+            material: materials.add(roof_color),
             transform: Transform::from_translation(Vec3::new(
                 -8.0,
                 WALL_SIZE / 2.0 + ROOF_SIZE / 4.0,
@@ -286,7 +354,7 @@ fn spawn_building_blocks(
         Collider::cuboid(ROOF_SIZE / 2.0, ROOF_SIZE / 4.0, ROOF_SIZE / 2.0),
     ));
 
-    // 绿色树木
+    // 树木
     let tree_positions = [
         Vec3::new(5.0, TREE_SIZE, 5.0),
         Vec3::new(-5.0, TREE_SIZE, -5.0),
@@ -296,7 +364,7 @@ fn spawn_building_blocks(
         commands.spawn((
             PbrBundle {
                 mesh: tree_mesh.clone(),
-                material: materials.add(TREE_COLOR),
+                material: materials.add(tree_color),
                 transform: Transform::from_translation(pos),
                 ..default()
             },
