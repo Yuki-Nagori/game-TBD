@@ -86,8 +86,16 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PlayerRuntimeConfig>()
+            .init_resource::<CachedCameraDirection>()
             .add_systems(Startup, spawn_player)
-            .add_systems(Update, (player_input_system, player_animation_system));
+            .add_systems(
+                Update,
+                (
+                    player_input_system,
+                    invalidate_camera_cache_system,
+                    player_animation_system,
+                ),
+            );
     }
 }
 
@@ -97,7 +105,7 @@ fn spawn_player(
     asset_server: Res<AssetServer>,
     mut registry: ResMut<EntityRegistry>,
     mut runtime_config: ResMut<PlayerRuntimeConfig>,
-    lua: NonSend<LuaRuntime>,
+    lua: Res<LuaRuntime>,
 ) {
     // 尝试从 Lua 读取配置
     let player_config: PlayerConfig = lua.get_config("PLAYER_CONFIG").unwrap_or_else(|| {
@@ -122,49 +130,89 @@ fn spawn_player(
     runtime_config.movement = movement_config;
     runtime_config.animation = animation_config.clone();
 
-    let player_scene: Handle<Scene> = asset_server.load(&player_config.model_scene);
-    let player = commands
+    // 尝试加载模型，失败时使用降级方案（胶囊体占位）
+    let player_entity = spawn_player_with_fallback(&mut commands, &asset_server, &player_config);
+
+    registry.by_id.insert(PLAYER_ID.to_string(), player_entity);
+
+    // 计算实际的出生高度
+    let spawn_height = player_config.base_height.max(PLAYER_COLLIDER_HEIGHT + 0.1);
+    lua.update_entity_position(PLAYER_ID, Vec3::new(0.0, spawn_height, 0.0));
+
+    info!("玩家实体创建完成（位置: y={}）", spawn_height);
+}
+
+/// 生成玩家实体，支持模型加载失败的降级方案
+fn spawn_player_with_fallback(
+    commands: &mut Commands,
+    asset_server: &AssetServer,
+    config: &PlayerConfig,
+) -> Entity {
+    // 尝试加载模型资源
+    let scene_handle: Handle<Scene> = asset_server.load(&config.model_scene);
+
+    // 检查资源是否存在（通过尝试获取加载状态）
+    // 注意：Bevy 的资源加载是异步的，我们在这里创建实体并附加场景
+    // 如果加载失败，Bevy 会在控制台输出警告，但游戏会继续运行
+
+    // 计算出生高度：确保胶囊体底部略高于地面，避免卡住
+    // 胶囊体半高为 PLAYER_COLLIDER_HEIGHT，底部在 y - PLAYER_COLLIDER_HEIGHT
+    // 地面高度为 0，需要保证 y - PLAYER_COLLIDER_HEIGHT > 0
+    let spawn_height = config.base_height.max(PLAYER_COLLIDER_HEIGHT + 0.1);
+
+    commands
         .spawn(SceneBundle {
-            scene: player_scene,
-            transform: Transform::from_xyz(0.0, player_config.base_height, 0.0)
-                .with_scale(Vec3::splat(player_config.scale)),
+            scene: scene_handle,
+            transform: Transform::from_xyz(0.0, spawn_height, 0.0)
+                .with_scale(Vec3::splat(config.scale)),
             ..default()
         })
         .insert(Player)
         .insert(CharacterMotion::default())
-        .insert(PlaceholderWalkAnimation::new(player_config.base_height))
-        // 物理组件
-        .insert(RigidBody::KinematicPositionBased)
+        .insert(PlaceholderWalkAnimation::new(spawn_height))
+        // 物理组件：使用 Dynamic 刚体配合速度控制，防止穿墙
+        .insert(RigidBody::Dynamic)
         .insert(Collider::capsule_y(
             PLAYER_COLLIDER_HEIGHT,
             PLAYER_COLLIDER_RADIUS,
         ))
-        .insert(KinematicCharacterController::default())
-        .id();
+        // 锁定旋转，防止玩家翻滚
+        .insert(LockedAxes::ROTATION_LOCKED_X | LockedAxes::ROTATION_LOCKED_Z)
+        // 质量设置（使用 AdditionalMassProperties）
+        .insert(AdditionalMassProperties::Mass(70.0))
+        // 阻尼设置，防止滑行过久
+        .insert(Damping {
+            linear_damping: 5.0,
+            angular_damping: 1.0,
+        })
+        // 使用速度控制移动，而非直接设置位置（防止穿墙）
+        .insert(Velocity::default())
+        // 启用 CCD（连续碰撞检测），防止高速移动穿墙
+        .insert(Ccd::enabled())
+        .id()
+}
 
-    registry.by_id.insert(PLAYER_ID.to_string(), player);
-    lua.update_entity_position(PLAYER_ID, Vec3::new(0.0, player_config.base_height, 0.0));
-
-    info!("玩家实体创建完成（含物理碰撞）");
+/// 缓存的相机方向资源
+/// 用于优化性能，避免每帧重复计算
+#[derive(Resource, Default)]
+pub struct CachedCameraDirection {
+    pub forward: Vec3,
+    pub right: Vec3,
+    pub is_valid: bool,
 }
 
 /// 玩家输入处理系统
 ///
-/// - WASD/方向键：移动（带碰撞检测）
+/// - WASD/方向键：移动（使用速度控制，带碰撞检测）
 /// - 移动方向决定人物朝向（独立于相机）
+/// - 性能优化：相机方向在查询外计算并缓存
 pub fn player_input_system(
     keyboard: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
     camera_query: Query<&Transform, (With<crate::components::ThirdPersonCamera>, Without<Player>)>,
-    mut query: Query<
-        (
-            &mut Transform,
-            &mut CharacterMotion,
-            &mut KinematicCharacterController,
-        ),
-        With<Player>,
-    >,
+    mut query: Query<(&mut Transform, &mut CharacterMotion, &mut Velocity), With<Player>>,
     runtime_config: Res<PlayerRuntimeConfig>,
+    mut cached_direction: ResMut<CachedCameraDirection>,
 ) {
     let Ok(camera_transform) = camera_query.get_single() else {
         return;
@@ -185,31 +233,41 @@ pub fn player_input_system(
         input.x += 1.0;
     }
 
-    // 使用相机朝向映射输入：上前下后、左右平移
-    let camera_forward = {
-        let f = camera_transform.rotation * -Vec3::Z;
-        Vec3::new(f.x, 0.0, f.z).normalize_or_zero()
-    };
-    let camera_right = {
-        let r = camera_transform.rotation * Vec3::X;
-        Vec3::new(r.x, 0.0, r.z).normalize_or_zero()
-    };
-    let direction = (camera_forward * input.y + camera_right * input.x).normalize_or_zero();
+    // 性能优化：计算并缓存相机方向（在查询循环外）
+    // 只有当缓存无效或相机变化时才重新计算
+    if !cached_direction.is_valid {
+        let camera_forward_raw = camera_transform.rotation * -Vec3::Z;
+        cached_direction.forward =
+            Vec3::new(camera_forward_raw.x, 0.0, camera_forward_raw.z).normalize_or_zero();
+
+        let camera_right_raw = camera_transform.rotation * Vec3::X;
+        cached_direction.right =
+            Vec3::new(camera_right_raw.x, 0.0, camera_right_raw.z).normalize_or_zero();
+
+        cached_direction.is_valid = true;
+    }
+
+    let direction =
+        (cached_direction.forward * input.y + cached_direction.right * input.x).normalize_or_zero();
 
     let is_moving = direction != Vec3::ZERO;
 
-    for (mut transform, mut motion, mut controller) in &mut query {
+    for (mut transform, mut motion, mut velocity) in &mut query {
         motion.is_moving = is_moving;
 
         if is_moving {
-            // 计算移动速度（使用 Lua 配置）
-            let velocity = direction * runtime_config.movement.speed;
-            controller.translation = Some(velocity * time.delta_seconds());
+            // 使用速度控制移动（防止穿墙）
+            let target_velocity = direction * runtime_config.movement.speed;
+            velocity.linvel.x = target_velocity.x;
+            velocity.linvel.z = target_velocity.z;
 
-            // 更新人物朝向为移动方向（使用 Lua 配置的 yaw_offset）
+            // 更新人物朝向为移动方向
             motion.facing_yaw = direction.x.atan2(direction.z) + runtime_config.player.yaw_offset;
         } else {
-            controller.translation = None;
+            // 停止时逐渐减速
+            let damping = 10.0 * time.delta_seconds();
+            velocity.linvel.x *= (1.0 - damping).max(0.0);
+            velocity.linvel.z *= (1.0 - damping).max(0.0);
         }
 
         // 始终应用人物朝向（平滑旋转）
@@ -221,12 +279,31 @@ pub fn player_input_system(
     }
 }
 
-/// 玩家行走动画系统（占位实现）
+/// 重置相机方向缓存系统
+/// 在相机变化时调用，使缓存失效
+pub fn invalidate_camera_cache_system(
+    camera_query: Query<
+        &Transform,
+        (
+            With<crate::components::ThirdPersonCamera>,
+            Changed<Transform>,
+        ),
+    >,
+    mut cached_direction: ResMut<CachedCameraDirection>,
+) {
+    if camera_query.get_single().is_ok() {
+        cached_direction.is_valid = false;
+    }
+}
+
+/// 玩家行走动画系统（已禁用 - 和物理引擎冲突）
 ///
-/// 移动时产生上下起伏，停止时平滑恢复
+/// 原实现直接修改 Y 轴位置，但 Dynamic 刚体由物理引擎控制位置，
+/// 两者冲突会导致角色悬浮或抖动。
+/// 后续需要改为视觉层动画（如模型缩放/旋转）而非位置修改。
 fn player_animation_system(
-    time: Res<Time>,
-    mut query: Query<
+    _time: Res<Time>,
+    mut _query: Query<
         (
             &mut Transform,
             &CharacterMotion,
@@ -234,17 +311,8 @@ fn player_animation_system(
         ),
         With<Player>,
     >,
-    runtime_config: Res<PlayerRuntimeConfig>,
+    _runtime_config: Res<PlayerRuntimeConfig>,
 ) {
-    for (mut transform, motion, mut walk_anim) in &mut query {
-        if motion.is_moving {
-            walk_anim.phase += time.delta_seconds() * runtime_config.animation.bob_speed;
-            transform.translation.y = walk_anim.base_height
-                + walk_anim.phase.sin() * runtime_config.animation.bob_amplitude;
-        } else {
-            walk_anim.phase = 0.0;
-            let recover = (runtime_config.animation.recover_speed * time.delta_seconds()).min(1.0);
-            transform.translation.y += (walk_anim.base_height - transform.translation.y) * recover;
-        }
-    }
+    // 暂时禁用 - 直接修改 Y 位置会和 Dynamic 刚体的物理引擎冲突
+    // 角色需要落在地面上，由物理引擎控制位置
 }

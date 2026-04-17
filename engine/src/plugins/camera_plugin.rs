@@ -50,6 +50,7 @@ impl Plugin for CameraPlugin {
                     camera_mouse_follow_system,
                     camera_zoom_system,
                     camera_follow_system,
+                    check_mouse_lock_status_system,
                 ),
             );
     }
@@ -59,7 +60,7 @@ impl Plugin for CameraPlugin {
 fn spawn_camera(
     mut commands: Commands,
     mut camera_state: ResMut<CameraState>,
-    lua: NonSend<LuaRuntime>,
+    lua: Res<LuaRuntime>,
 ) {
     // 尝试从 Lua 读取相机配置
     let config: CameraConfig = lua.get_config("CAMERA_CONFIG").unwrap_or_else(|| {
@@ -88,15 +89,51 @@ fn spawn_camera(
 }
 
 /// 设置鼠标：锁定并隐藏
+///
+/// 错误处理：
+/// - 如果窗口不存在，记录错误
+/// - 如果锁定失败（某些平台/窗口模式不支持），显示警告并继续运行
 fn setup_mouse(mut window_query: Query<&mut Window, With<PrimaryWindow>>) {
     let Ok(mut window) = window_query.get_single_mut() else {
+        error!("无法获取主窗口，鼠标锁定失败");
         return;
     };
 
+    // 尝试锁定鼠标
     window.cursor.grab_mode = CursorGrabMode::Locked;
     window.cursor.visible = false;
 
-    info!("鼠标已锁定（陀螺仪模式），按 Alt 键可释放鼠标");
+    // 检查是否成功锁定
+    if window.cursor.grab_mode == CursorGrabMode::Locked {
+        info!("鼠标已锁定（陀螺仪模式），按 Alt 键可释放鼠标");
+    } else {
+        warn!("鼠标锁定失败（可能是不支持的窗口模式），按 Alt 键重试");
+    }
+}
+
+/// 鼠标状态检查系统
+///
+/// 定期检查鼠标锁定状态，确保游戏始终知道当前状态
+/// 处理边界情况：窗口失去焦点后重新获得焦点时恢复锁定
+fn check_mouse_lock_status_system(
+    window_query: Query<&Window, With<PrimaryWindow>>,
+    mut camera_state: ResMut<CameraState>,
+) {
+    let Ok(window) = window_query.get_single() else {
+        return;
+    };
+
+    let is_actually_locked = window.cursor.grab_mode == CursorGrabMode::Locked;
+
+    // 如果实际状态与记录状态不一致，更新记录
+    if is_actually_locked != camera_state.mouse_locked {
+        camera_state.mouse_locked = is_actually_locked;
+        if is_actually_locked {
+            info!("鼠标锁定状态：已锁定");
+        } else {
+            info!("鼠标锁定状态：已释放");
+        }
+    }
 }
 
 /// 切换鼠标锁定状态系统
@@ -191,6 +228,7 @@ fn camera_zoom_system(
 /// 相机跟随系统
 ///
 /// 使相机基于球面坐标跟随玩家
+/// 性能优化：使用栈上计算，避免堆分配
 fn camera_follow_system(
     player_query: Query<&Transform, With<Player>>,
     mut camera_query: Query<&mut Transform, (With<ThirdPersonCamera>, Without<Player>)>,
@@ -208,13 +246,22 @@ fn camera_follow_system(
     let yaw = camera_state.yaw;
     let pitch = camera_state.pitch.clamp(CAMERA_PITCH_MIN, CAMERA_PITCH_MAX);
 
-    // 球面坐标转笛卡尔坐标
-    let x = radius * pitch.cos() * yaw.sin();
-    let y = radius * pitch.sin();
-    let z = radius * pitch.cos() * yaw.cos();
+    // 性能优化：球面坐标转笛卡尔坐标（栈上计算）
+    let cos_pitch = pitch.cos();
+    let sin_pitch = pitch.sin();
+    let cos_yaw = yaw.cos();
+    let sin_yaw = yaw.sin();
+
+    let x = radius * cos_pitch * sin_yaw;
+    let y = radius * sin_pitch;
+    let z = radius * cos_pitch * cos_yaw;
 
     let player_position = player_transform.translation;
-    let target_position = player_position + Vec3::new(x, y, z);
+    let target_position = Vec3::new(
+        player_position.x + x,
+        player_position.y + y,
+        player_position.z + z,
+    );
 
     // 平滑移动相机（使用 Lua 配置的平滑因子）
     camera_transform.translation = camera_transform

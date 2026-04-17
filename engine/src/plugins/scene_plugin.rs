@@ -1,15 +1,16 @@
 //! 场景插件
 //!
-//! 场景初始化、方块建筑系统、Lua 热重载、场景切换
+//! 职责：3D 场景初始化、方块建筑系统、场景切换
+//! Lua 相关功能已迁移到 lua_command_plugin
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 use std::collections::HashMap;
 
+use crate::components::Player;
 use crate::constants::*;
-use crate::lua_api::{LuaCommand, LuaRuntime};
-use crate::resources::{EntityRegistry, ScriptHotReload};
-use crate::utils::get_last_modified;
+use crate::lua_api::LuaRuntime;
+use crate::resources::EntityRegistry;
 
 /// 场景对象配置
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -112,23 +113,13 @@ impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<EntityRegistry>()
             .init_resource::<CurrentScene>()
-            .insert_resource(ScriptHotReload::new("game/main.lua"))
             .add_systems(Startup, (load_scene_config, spawn_scene).chain())
-            .add_systems(
-                Update,
-                (
-                    lua_update_system,
-                    apply_lua_commands_system,
-                    sync_entity_positions_to_lua_system,
-                    hot_reload_lua_script_system,
-                    check_scene_switch_system,
-                ),
-            );
+            .add_systems(Update, check_scene_switch_system);
     }
 }
 
 /// 加载场景配置
-fn load_scene_config(lua: NonSend<LuaRuntime>, mut current_scene: ResMut<CurrentScene>) {
+fn load_scene_config(lua: Res<LuaRuntime>, mut current_scene: ResMut<CurrentScene>) {
     let scenes_config: ScenesConfig = lua.get_config("SCENE_CONFIG").unwrap_or_else(|| {
         info!("使用默认场景配置");
         ScenesConfig::default()
@@ -186,7 +177,7 @@ fn spawn_scene(
 ///
 /// 检测玩家是否接近场景切换点
 fn check_scene_switch_system(
-    player_query: Query<&Transform, With<crate::components::Player>>,
+    player_query: Query<&Transform, With<Player>>,
     current_scene: Res<CurrentScene>,
 ) {
     let Ok(player_transform) = player_query.get_single() else {
@@ -240,15 +231,15 @@ fn spawn_building_blocks(
         ));
     }
 
-    // 黄色屋顶
+    // 黄色屋顶 - 移动到角落作为独立小亭
     commands.spawn((
         PbrBundle {
             mesh: roof_mesh,
             material: materials.add(ROOF_COLOR),
             transform: Transform::from_translation(Vec3::new(
-                0.0,
-                WALL_SIZE + ROOF_SIZE / 4.0,
-                0.0,
+                -8.0,
+                WALL_SIZE / 2.0 + ROOF_SIZE / 4.0,
+                -8.0,
             )),
             ..default()
         },
@@ -271,142 +262,5 @@ fn spawn_building_blocks(
             },
             Collider::cuboid(TREE_SIZE / 2.0, TREE_SIZE, TREE_SIZE / 2.0),
         ));
-    }
-}
-
-/// Lua 更新系统
-fn lua_update_system(lua: NonSend<LuaRuntime>, time: Res<Time>) {
-    use tracing::error;
-
-    if let Err(err) = lua.call_function::<_, ()>("update", time.delta_seconds()) {
-        error!("Lua update 调用失败: {}", err);
-    }
-}
-
-/// 应用 Lua 命令系统
-fn apply_lua_commands_system(
-    mut commands: Commands,
-    lua: NonSend<LuaRuntime>,
-    mut registry: ResMut<EntityRegistry>,
-    mut query: Query<&mut Transform>,
-) {
-    use tracing::{info, warn};
-
-    for command in lua.drain_commands() {
-        match command {
-            LuaCommand::CreateEntity { id, entity_type } => {
-                let color = match entity_type.as_str() {
-                    "npc" => Color::rgb(0.2, 0.5, 0.9),
-                    "effect" => Color::rgb(0.9, 0.8, 0.1),
-                    _ => Color::rgb(0.4, 0.4, 0.4),
-                };
-
-                let entity = commands
-                    .spawn(SpriteBundle {
-                        sprite: Sprite {
-                            color,
-                            custom_size: Some(Vec2::new(42.0, 42.0)),
-                            ..default()
-                        },
-                        ..default()
-                    })
-                    .id();
-
-                registry.by_id.insert(id.clone(), entity);
-                lua.update_entity_position(&id, Vec3::ZERO);
-                info!("Lua 创建实体成功: {}", id);
-            }
-            LuaCommand::DestroyEntity { id } => {
-                lua.remove_entity_position(&id);
-                if let Some(entity) = registry.by_id.remove(&id) {
-                    commands.entity(entity).despawn_recursive();
-                    registry.components.remove(&id);
-                    info!("Lua 销毁实体成功: {}", id);
-                } else {
-                    warn!("Lua 请求销毁未知实体: {}", id);
-                }
-            }
-            LuaCommand::SetPosition { id, x, y, z } => {
-                if let Some(entity) = registry.by_id.get(&id)
-                    && let Ok(mut transform) = query.get_mut(*entity)
-                {
-                    transform.translation = Vec3::new(x, y, z);
-                }
-            }
-            LuaCommand::AddComponent { id, name, value } => {
-                registry
-                    .components
-                    .entry(id)
-                    .or_default()
-                    .insert(name, value);
-            }
-            LuaCommand::RemoveComponent { id, name } => {
-                if let Some(components) = registry.components.get_mut(&id) {
-                    components.remove(&name);
-                }
-            }
-        }
-    }
-}
-
-/// 同步实体位置到 Lua
-fn sync_entity_positions_to_lua_system(
-    lua: NonSend<LuaRuntime>,
-    registry: Res<EntityRegistry>,
-    query: Query<&Transform>,
-) {
-    for (id, entity) in &registry.by_id {
-        if let Ok(transform) = query.get(*entity) {
-            lua.update_entity_position(id, transform.translation);
-        }
-    }
-}
-
-/// Lua 脚本热重载系统
-fn hot_reload_lua_script_system(
-    time: Res<Time>,
-    mut commands: Commands,
-    mut registry: ResMut<EntityRegistry>,
-    lua: NonSend<LuaRuntime>,
-    mut hot_reload: ResMut<ScriptHotReload>,
-) {
-    use tracing::{error, info};
-
-    if !hot_reload.check_timer.tick(time.delta()).just_finished() {
-        return;
-    }
-
-    let Some(current_modified) = get_last_modified(&hot_reload.script_path) else {
-        return;
-    };
-
-    if current_modified <= hot_reload.last_modified {
-        return;
-    }
-
-    // 清理脚本管理的实体（保留玩家）
-    let ids_to_remove: Vec<String> = registry
-        .by_id
-        .keys()
-        .filter(|id| id.as_str() != PLAYER_ID)
-        .cloned()
-        .collect();
-
-    for id in ids_to_remove {
-        if let Some(entity) = registry.by_id.remove(&id) {
-            commands.entity(entity).despawn_recursive();
-            registry.components.remove(&id);
-        }
-        lua.remove_entity_position(&id);
-    }
-
-    match lua.load_main_script(&hot_reload.script_path) {
-        Ok(()) => {
-            hot_reload.last_modified = current_modified;
-            info!("Lua 脚本已热重载: {}", hot_reload.script_path);
-        }
-        Err(err) => {
-            error!("Lua 热重载失败: {}", err);
-        }
     }
 }

@@ -37,33 +37,18 @@ SCENE_CONFIG = scenes_config
 
 -- 游戏逻辑状态
 local elapsed = 0.0
-local spawned_entity_id = nil
-local removed_spawned_entity = false
 
 -- 初始化函数
 function init()
     log_info("游戏初始化中...")
     log_info("游戏版本: " .. GAME_CONFIG.version)
-
-    -- 基础 ECS API 演示：创建实体 + 添加组件
-    local spawned = Entity.create("npc")
-    spawned_entity_id = spawned.id
-    Entity.add_component(spawned_entity_id, "faction", { name = "锦衣卫", rank = 1 })
-    Entity.set_position(spawned_entity_id, -220.0, -120.0, 0.0)
-
     log_info("游戏初始化完成")
 end
 
 -- 主循环（每帧调用）
 function update(dt)
     elapsed = elapsed + dt
-
-    -- ECS 创建/销毁演示：3秒后销毁 init 阶段创建的实体
-    if (not removed_spawned_entity) and elapsed > 3.0 and spawned_entity_id ~= nil then
-        Entity.destroy(spawned_entity_id)
-        removed_spawned_entity = true
-        log_info("已销毁测试实体: " .. spawned_entity_id)
-    end
+    -- 游戏逻辑更新（留空供后续开发）
 end
 
 -- 启动

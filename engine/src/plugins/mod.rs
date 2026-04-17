@@ -3,6 +3,7 @@
 //! 按功能拆分的插件，便于管理和扩展
 
 pub mod camera_plugin;
+pub mod lua_command_plugin;
 pub mod player_plugin;
 pub mod scene_plugin;
 
@@ -10,6 +11,7 @@ use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
 use camera_plugin::CameraPlugin;
+use lua_command_plugin::LuaCommandPlugin;
 use player_plugin::PlayerPlugin;
 use scene_plugin::ScenePlugin;
 
@@ -27,6 +29,7 @@ impl Plugin for GamePlugin {
             PlayerPlugin,
             CameraPlugin,
             ScenePlugin,
+            LuaCommandPlugin,
         ));
     }
 }

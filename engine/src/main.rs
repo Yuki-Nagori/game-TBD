@@ -7,13 +7,21 @@
 //!
 //! 代码结构：
 //! - main.rs: 入口，插件注册
-//! - plugins/: 功能插件（player, camera, scene）
+//! - plugins/: 功能插件（player, camera, scene, lua_command）
 //! - components/: ECS 组件定义
 //! - resources/: 全局资源
 //! - constants.rs: 游戏常量
 //! - utils.rs: 工具函数
 //! - core/: 游戏核心逻辑（时间、功法等）
 //! - lua_api/: Lua 运行时与 API
+//!
+//! # Lua 运行时说明
+//!
+//! Lua 运行时采用 Actor 模式实现线程安全：
+//! - `LuaRuntime` 是 `Send + Sync`，可在任何 Bevy 系统使用
+//! - 实际的 Lua 状态运行在独立的后台线程
+//! - 通过通道进行异步通信
+//! - 这解决了 mlua::Lua 的 !Send 限制，同时保持多线程 ECS 的性能优势
 
 use bevy::log::LogPlugin;
 use bevy::prelude::*;
@@ -56,9 +64,9 @@ fn main() -> anyhow::Result<()> {
         config.version, config.start_year, config.time_scale
     );
 
-    // 初始化 Lua 运行时
+    // 初始化 Lua 运行时（Actor 模式，线程安全）
     let lua = LuaRuntime::new()?;
-    info!("Lua 运行时初始化完成");
+    info!("Lua 运行时初始化完成（Actor 模式）");
 
     // 加载主脚本
     lua.load_main_script("game/main.lua")?;
@@ -69,7 +77,8 @@ fn main() -> anyhow::Result<()> {
     info!("资源目录: {}", asset_root);
 
     App::new()
-        .insert_non_send_resource(lua)
+        // LuaRuntime 现在是线程安全的（Send + Sync），可以作为普通资源
+        .insert_resource(lua)
         .add_plugins(
             DefaultPlugins
                 .build()
