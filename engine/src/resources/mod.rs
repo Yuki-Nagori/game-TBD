@@ -22,6 +22,12 @@ pub struct CameraState {
     pub yaw: f32,
     /// 俯仰角（上下旋转）
     pub pitch: f32,
+    /// 当前相机距离（动态调整）
+    pub distance: f32,
+    /// 平滑因子
+    pub smooth_factor: f32,
+    /// 鼠标是否锁定（陀螺仪模式）
+    pub mouse_locked: bool,
 }
 
 impl Default for CameraState {
@@ -29,6 +35,9 @@ impl Default for CameraState {
         Self {
             yaw: 0.0,
             pitch: 20.0f32.to_radians(),
+            distance: 20.0,
+            smooth_factor: 0.1,
+            mouse_locked: true,
         }
     }
 }

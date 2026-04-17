@@ -69,6 +69,21 @@ impl LuaRuntime {
     /// 加载并执行 Lua 脚本
     pub fn load_main_script<P: AsRef<Path>>(&self, path: P) -> anyhow::Result<()> {
         let path = path.as_ref();
+
+        // 设置 require 搜索路径
+        let script_dir = path
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+        let package: mlua::Table = self.lua.globals().get("package")?;
+        let lua_path = format!(
+            "{}/?.lua;{}/?/init.lua",
+            script_dir.display(),
+            script_dir.display()
+        );
+        package.set("path", lua_path)?;
+
         let script = std::fs::read_to_string(path)
             .map_err(|e| anyhow::anyhow!("无法读取脚本 {:?}: {}", path, e))?;
 
@@ -117,6 +132,13 @@ impl LuaRuntime {
         if let Ok(mut positions) = self.shared.positions.lock() {
             positions.remove(id);
         }
+    }
+
+    /// 从 Lua 全局表读取配置
+    pub fn get_config<T: serde::de::DeserializeOwned>(&self, table_name: &str) -> Option<T> {
+        let globals = self.lua.globals();
+        let table: mlua::Table = globals.get(table_name).ok()?;
+        self.lua.from_value(mlua::Value::Table(table)).ok()
     }
 
     /// 加载 Mod（为创意工坊预留）

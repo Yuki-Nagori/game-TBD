@@ -1,22 +1,119 @@
 //! 场景插件
 //!
-//! 场景初始化、方块建筑系统、Lua 热重载
+//! 场景初始化、方块建筑系统、Lua 热重载、场景切换
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
+use std::collections::HashMap;
 
 use crate::constants::*;
 use crate::lua_api::{LuaCommand, LuaRuntime};
 use crate::resources::{EntityRegistry, ScriptHotReload};
 use crate::utils::get_last_modified;
 
+/// 场景对象配置
+#[derive(Debug, Clone, serde::Deserialize)]
+#[allow(dead_code)]
+pub struct SceneObjectConfig {
+    pub r#type: String,
+    pub x: f32,
+    pub z: f32,
+    pub color: Option<String>,
+}
+
+/// 场景连接配置
+#[derive(Debug, Clone, serde::Deserialize)]
+#[allow(dead_code)]
+pub struct SceneConnectionConfig {
+    pub to: String,
+    pub x: f32,
+    pub z: f32,
+    pub name: String,
+}
+
+/// 单个场景配置
+#[derive(Debug, Clone, serde::Deserialize)]
+#[allow(dead_code)]
+pub struct SceneConfig {
+    pub name: String,
+    pub description: String,
+    pub spawn_point: HashMap<String, f32>,
+    pub ground_size: f32,
+    pub objects: Vec<SceneObjectConfig>,
+    pub connections: Vec<SceneConnectionConfig>,
+}
+
+/// 场景总配置
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct ScenesConfig {
+    pub current: String,
+    pub scenes: HashMap<String, SceneConfig>,
+}
+
+impl Default for ScenesConfig {
+    fn default() -> Self {
+        let mut scenes = HashMap::new();
+        scenes.insert(
+            "suburb".to_string(),
+            SceneConfig {
+                name: "城郊".to_string(),
+                description: "北京城外，一片宁静的土地".to_string(),
+                spawn_point: {
+                    let mut p = HashMap::new();
+                    p.insert("x".to_string(), 0.0);
+                    p.insert("y".to_string(), 1.0);
+                    p.insert("z".to_string(), 0.0);
+                    p
+                },
+                ground_size: 50.0,
+                objects: vec![],
+                connections: vec![],
+            },
+        );
+        Self {
+            current: "suburb".to_string(),
+            scenes,
+        }
+    }
+}
+
+/// 当前场景状态
+#[derive(Resource)]
+pub struct CurrentScene {
+    pub scene_id: String,
+    pub config: SceneConfig,
+}
+
+impl Default for CurrentScene {
+    fn default() -> Self {
+        Self {
+            scene_id: "suburb".to_string(),
+            config: SceneConfig {
+                name: "城郊".to_string(),
+                description: "北京城外，一片宁静的土地".to_string(),
+                spawn_point: {
+                    let mut p = HashMap::new();
+                    p.insert("x".to_string(), 0.0);
+                    p.insert("y".to_string(), 1.0);
+                    p.insert("z".to_string(), 0.0);
+                    p
+                },
+                ground_size: 50.0,
+                objects: vec![],
+                connections: vec![],
+            },
+        }
+    }
+}
+
 pub struct ScenePlugin;
 
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<EntityRegistry>()
+            .init_resource::<CurrentScene>()
             .insert_resource(ScriptHotReload::new("game/main.lua"))
-            .add_systems(Startup, spawn_scene)
+            .add_systems(Startup, (load_scene_config, spawn_scene).chain())
             .add_systems(
                 Update,
                 (
@@ -24,8 +121,28 @@ impl Plugin for ScenePlugin {
                     apply_lua_commands_system,
                     sync_entity_positions_to_lua_system,
                     hot_reload_lua_script_system,
+                    check_scene_switch_system,
                 ),
             );
+    }
+}
+
+/// 加载场景配置
+fn load_scene_config(lua: NonSend<LuaRuntime>, mut current_scene: ResMut<CurrentScene>) {
+    let scenes_config: ScenesConfig = lua.get_config("SCENE_CONFIG").unwrap_or_else(|| {
+        info!("使用默认场景配置");
+        ScenesConfig::default()
+    });
+
+    info!("场景配置加载完成，当前场景: {}", scenes_config.current);
+
+    // 设置当前场景
+    if let Some(config) = scenes_config.scenes.get(&scenes_config.current) {
+        current_scene.scene_id = scenes_config.current.clone();
+        current_scene.config = config.clone();
+        info!("当前场景: {} - {}", config.name, config.description);
+    } else {
+        warn!("场景 {} 未找到，使用默认", scenes_config.current);
     }
 }
 
@@ -63,6 +180,35 @@ fn spawn_scene(
     spawn_building_blocks(&mut commands, &mut meshes, &mut materials);
 
     info!("场景创建完成");
+}
+
+/// 场景切换检测系统
+///
+/// 检测玩家是否接近场景切换点
+fn check_scene_switch_system(
+    player_query: Query<&Transform, With<crate::components::Player>>,
+    current_scene: Res<CurrentScene>,
+) {
+    let Ok(player_transform) = player_query.get_single() else {
+        return;
+    };
+
+    let player_pos = player_transform.translation;
+
+    // 检查是否接近场景切换点
+    for connection in &current_scene.config.connections {
+        let distance = Vec2::new(player_pos.x - connection.x, player_pos.z - connection.z).length();
+
+        // 如果接近切换点（2米内），显示提示
+        if distance < 2.0 {
+            // TODO: 显示 UI 提示，允许玩家按键切换场景
+            // 目前只是记录日志
+            info!(
+                "接近场景切换点: {} -> {} (按 F 切换)",
+                current_scene.config.name, connection.name
+            );
+        }
+    }
 }
 
 /// 生成方块建筑占位

@@ -10,11 +10,83 @@ use crate::constants::*;
 use crate::lua_api::LuaRuntime;
 use crate::resources::EntityRegistry;
 
+/// 玩家配置（从 Lua 读取）
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct PlayerConfig {
+    #[serde(rename = "model_scene")]
+    pub model_scene: String,
+    #[serde(rename = "scale")]
+    pub scale: f32,
+    #[serde(rename = "base_height")]
+    pub base_height: f32,
+    #[serde(rename = "yaw_offset")]
+    pub yaw_offset: f32,
+}
+
+impl Default for PlayerConfig {
+    fn default() -> Self {
+        Self {
+            model_scene: PLAYER_MODEL_SCENE.to_string(),
+            scale: PLAYER_MODEL_SCALE,
+            base_height: PLAYER_BASE_HEIGHT,
+            yaw_offset: PLAYER_MODEL_YAW_OFFSET,
+        }
+    }
+}
+
+/// 玩家移动配置（从 Lua 读取）
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct PlayerMovementConfig {
+    #[serde(rename = "speed")]
+    pub speed: f32,
+    #[serde(rename = "rotation_speed")]
+    pub rotation_speed: f32,
+}
+
+impl Default for PlayerMovementConfig {
+    fn default() -> Self {
+        Self {
+            speed: PLAYER_SPEED,
+            rotation_speed: ROTATION_SPEED,
+        }
+    }
+}
+
+/// 行走动画配置（从 Lua 读取）
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct WalkAnimationConfig {
+    #[serde(rename = "bob_amplitude")]
+    pub bob_amplitude: f32,
+    #[serde(rename = "bob_speed")]
+    pub bob_speed: f32,
+    #[serde(rename = "recover_speed")]
+    pub recover_speed: f32,
+}
+
+impl Default for WalkAnimationConfig {
+    fn default() -> Self {
+        Self {
+            bob_amplitude: WALK_BOB_AMPLITUDE,
+            bob_speed: WALK_BOB_SPEED,
+            recover_speed: WALK_BOB_RECOVER_SPEED,
+        }
+    }
+}
+
+/// 运行时配置资源
+#[derive(Default, Resource)]
+pub struct PlayerRuntimeConfig {
+    pub player: PlayerConfig,
+    pub movement: PlayerMovementConfig,
+    pub animation: WalkAnimationConfig,
+}
+
 pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn_player)
+        app.init_resource::<PlayerRuntimeConfig>()
+            .add_systems(Startup, spawn_player)
             .add_systems(Update, (player_input_system, player_animation_system));
     }
 }
@@ -24,19 +96,43 @@ fn spawn_player(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut registry: ResMut<EntityRegistry>,
+    mut runtime_config: ResMut<PlayerRuntimeConfig>,
     lua: NonSend<LuaRuntime>,
 ) {
-    let player_scene: Handle<Scene> = asset_server.load(PLAYER_MODEL_SCENE);
+    // 尝试从 Lua 读取配置
+    let player_config: PlayerConfig = lua.get_config("PLAYER_CONFIG").unwrap_or_else(|| {
+        info!("使用默认玩家配置");
+        PlayerConfig::default()
+    });
+    let movement_config: PlayerMovementConfig =
+        lua.get_config("PLAYER_MOVEMENT").unwrap_or_else(|| {
+            info!("使用默认移动配置");
+            PlayerMovementConfig::default()
+        });
+    let animation_config: WalkAnimationConfig =
+        lua.get_config("WALK_ANIMATION").unwrap_or_else(|| {
+            info!("使用默认动画配置");
+            WalkAnimationConfig::default()
+        });
+
+    info!("玩家配置: {:?}", player_config);
+
+    // 保存到运行时配置
+    runtime_config.player = player_config.clone();
+    runtime_config.movement = movement_config;
+    runtime_config.animation = animation_config.clone();
+
+    let player_scene: Handle<Scene> = asset_server.load(&player_config.model_scene);
     let player = commands
         .spawn(SceneBundle {
             scene: player_scene,
-            transform: Transform::from_xyz(0.0, PLAYER_BASE_HEIGHT, 0.0)
-                .with_scale(Vec3::splat(PLAYER_MODEL_SCALE)),
+            transform: Transform::from_xyz(0.0, player_config.base_height, 0.0)
+                .with_scale(Vec3::splat(player_config.scale)),
             ..default()
         })
         .insert(Player)
         .insert(CharacterMotion::default())
-        .insert(PlaceholderWalkAnimation::new(PLAYER_BASE_HEIGHT))
+        .insert(PlaceholderWalkAnimation::new(player_config.base_height))
         // 物理组件
         .insert(RigidBody::KinematicPositionBased)
         .insert(Collider::capsule_y(
@@ -47,7 +143,7 @@ fn spawn_player(
         .id();
 
     registry.by_id.insert(PLAYER_ID.to_string(), player);
-    lua.update_entity_position(PLAYER_ID, Vec3::new(0.0, PLAYER_BASE_HEIGHT, 0.0));
+    lua.update_entity_position(PLAYER_ID, Vec3::new(0.0, player_config.base_height, 0.0));
 
     info!("玩家实体创建完成（含物理碰撞）");
 }
@@ -68,6 +164,7 @@ pub fn player_input_system(
         ),
         With<Player>,
     >,
+    runtime_config: Res<PlayerRuntimeConfig>,
 ) {
     let Ok(camera_transform) = camera_query.get_single() else {
         return;
@@ -105,21 +202,22 @@ pub fn player_input_system(
         motion.is_moving = is_moving;
 
         if is_moving {
-            // 计算移动速度
-            let velocity = direction * PLAYER_SPEED;
+            // 计算移动速度（使用 Lua 配置）
+            let velocity = direction * runtime_config.movement.speed;
             controller.translation = Some(velocity * time.delta_seconds());
 
-            // 更新人物朝向为移动方向（独立于相机）
-            motion.facing_yaw = direction.x.atan2(direction.z) + PLAYER_MODEL_YAW_OFFSET;
+            // 更新人物朝向为移动方向（使用 Lua 配置的 yaw_offset）
+            motion.facing_yaw = direction.x.atan2(direction.z) + runtime_config.player.yaw_offset;
         } else {
             controller.translation = None;
         }
 
         // 始终应用人物朝向（平滑旋转）
         let target_rotation = Quat::from_rotation_y(motion.facing_yaw);
-        transform.rotation = transform
-            .rotation
-            .slerp(target_rotation, ROTATION_SPEED * time.delta_seconds());
+        transform.rotation = transform.rotation.slerp(
+            target_rotation,
+            runtime_config.movement.rotation_speed * time.delta_seconds(),
+        );
     }
 }
 
@@ -136,15 +234,16 @@ fn player_animation_system(
         ),
         With<Player>,
     >,
+    runtime_config: Res<PlayerRuntimeConfig>,
 ) {
     for (mut transform, motion, mut walk_anim) in &mut query {
         if motion.is_moving {
-            walk_anim.phase += time.delta_seconds() * WALK_BOB_SPEED;
-            transform.translation.y =
-                walk_anim.base_height + walk_anim.phase.sin() * WALK_BOB_AMPLITUDE;
+            walk_anim.phase += time.delta_seconds() * runtime_config.animation.bob_speed;
+            transform.translation.y = walk_anim.base_height
+                + walk_anim.phase.sin() * runtime_config.animation.bob_amplitude;
         } else {
             walk_anim.phase = 0.0;
-            let recover = (WALK_BOB_RECOVER_SPEED * time.delta_seconds()).min(1.0);
+            let recover = (runtime_config.animation.recover_speed * time.delta_seconds()).min(1.0);
             transform.translation.y += (walk_anim.base_height - transform.translation.y) * recover;
         }
     }
