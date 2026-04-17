@@ -136,8 +136,12 @@ fn spawn_player(
 
     registry.by_id.insert(PLAYER_ID.to_string(), player_entity);
 
-    // 计算实际的出生高度
-    let spawn_height = player_config.base_height.max(PLAYER_COLLIDER_HEIGHT + 0.1);
+    // 计算实际的出生高度：确保胶囊体底部略高于地面，避免卡住
+    // 胶囊体半高为 PLAYER_COLLIDER_HEIGHT，半径为 PLAYER_COLLIDER_RADIUS
+    // 底部在 y - (PLAYER_COLLIDER_HEIGHT + PLAYER_COLLIDER_RADIUS)，需要保证 > 0
+    let spawn_height = player_config
+        .base_height
+        .max(PLAYER_COLLIDER_HEIGHT + PLAYER_COLLIDER_RADIUS + 0.1);
     lua.update_entity_position(PLAYER_ID, Vec3::new(0.0, spawn_height, 0.0));
 
     info!("玩家实体创建完成（位置: y={}）", spawn_height);
@@ -157,9 +161,11 @@ fn spawn_player_with_fallback(
     // 如果加载失败，Bevy 会在控制台输出警告，但游戏会继续运行
 
     // 计算出生高度：确保胶囊体底部略高于地面，避免卡住
-    // 胶囊体半高为 PLAYER_COLLIDER_HEIGHT，底部在 y - PLAYER_COLLIDER_HEIGHT
-    // 地面高度为 0，需要保证 y - PLAYER_COLLIDER_HEIGHT > 0
-    let spawn_height = config.base_height.max(PLAYER_COLLIDER_HEIGHT + 0.1);
+    // 胶囊体半高为 PLAYER_COLLIDER_HEIGHT，半径为 PLAYER_COLLIDER_RADIUS
+    // 底部在 y - (PLAYER_COLLIDER_HEIGHT + PLAYER_COLLIDER_RADIUS)，需要保证 > 0
+    let spawn_height = config
+        .base_height
+        .max(PLAYER_COLLIDER_HEIGHT + PLAYER_COLLIDER_RADIUS + 0.1);
 
     commands
         .spawn(SceneBundle {

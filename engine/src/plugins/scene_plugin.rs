@@ -158,14 +158,15 @@ fn spawn_scene(
     });
 
     // 地面（带碰撞）
-    let ground_mesh = meshes.add(Plane3d::default().mesh().size(GROUND_SIZE, GROUND_SIZE));
+    let ground_size = current_scene.config.ground_size;
+    let ground_mesh = meshes.add(Plane3d::default().mesh().size(ground_size, ground_size));
     commands.spawn((
         PbrBundle {
             mesh: ground_mesh,
             material: materials.add(GROUND_COLOR),
             ..default()
         },
-        Collider::cuboid(GROUND_SIZE / 2.0, 0.1, GROUND_SIZE / 2.0),
+        Collider::cuboid(ground_size / 2.0, 0.1, ground_size / 2.0),
     ));
 
     // 从场景配置生成对象

@@ -40,7 +40,6 @@ pub const WALK_BOB_RECOVER_SPEED: f32 = 8.0;
 pub const ROTATION_SPEED: f32 = 10.0;
 
 // ===== 场景（后续迁移到 Lua 关卡配置） =====
-pub const GROUND_SIZE: f32 = 20.0;
 pub const WALL_SIZE: f32 = 2.0;
 pub const ROOF_SIZE: f32 = 2.2;
 pub const TREE_SIZE: f32 = 1.5;
