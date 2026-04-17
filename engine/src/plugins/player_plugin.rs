@@ -54,6 +54,7 @@ impl Default for PlayerMovementConfig {
 
 /// 行走动画配置（从 Lua 读取）
 #[derive(Debug, Clone, serde::Deserialize)]
+#[allow(dead_code)]
 pub struct WalkAnimationConfig {
     #[serde(rename = "bob_amplitude")]
     pub bob_amplitude: f32,
