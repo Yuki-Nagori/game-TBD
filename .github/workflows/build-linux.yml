@@ -52,8 +52,9 @@ jobs:
           lua5.4 \
           luarocks
 
-        # 安装 luacheck 和 stylua（使用本地安装避免权限问题）
+        # 安装 sccache、luacheck 和 stylua（使用本地安装避免权限问题）
         if [ "${{ steps.cache-deps.outputs.cache-hit }}" != "true" ]; then
+          cargo install sccache --force
           luarocks install --local luacheck --force
           cargo install stylua --force
         fi
@@ -68,8 +69,6 @@ jobs:
     
     - name: Build
       run: |
-        unset RUSTC_WRAPPER
-        unset SCCACHE_GHA_ENABLED
         xmake f -m release
         xmake b
 

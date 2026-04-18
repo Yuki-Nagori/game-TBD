@@ -49,8 +49,9 @@ jobs:
       run: |
         choco install -y lua luarocks
 
-        # 安装 luacheck 和 stylua
+        # 安装 sccache、luacheck 和 stylua
         if ("${{ steps.cache-deps.outputs.cache-hit }}" -ne "true") {
+          cargo install sccache --force
           luarocks install luacheck --force
           cargo install stylua --force
         }
@@ -61,8 +62,6 @@ jobs:
 
     - name: Build
       run: |
-        Remove-Item Env:RUSTC_WRAPPER -ErrorAction SilentlyContinue
-        Remove-Item Env:SCCACHE_GHA_ENABLED -ErrorAction SilentlyContinue
         xmake f -m release
         xmake b
 

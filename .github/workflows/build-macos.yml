@@ -36,7 +36,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        brew install pkg-config lua luacheck stylua
+        brew install pkg-config lua luacheck stylua sccache
 
     - name: Install xmake
       uses: xmake-io/github-action-setup-xmake@v1
@@ -45,8 +45,6 @@ jobs:
     
     - name: Build
       run: |
-        unset RUSTC_WRAPPER
-        unset SCCACHE_GHA_ENABLED
         xmake f -m release
         xmake b
 
