@@ -49,16 +49,15 @@ jobs:
       run: |
         choco install -y lua luarocks
 
-        # 安装 sccache、luacheck 和 stylua
-        if ("${{ steps.cache-deps.outputs.cache-hit }}" -ne "true") {
-          cargo install sccache --force
-          luarocks install luacheck --force
-          cargo install stylua --force
-        }
+        # 安装 sccache、luacheck 和 stylua（缓存未命中时执行）
+        cargo install sccache 2>$null || echo "sccache already installed or cached"
+        luarocks install luacheck
+        cargo install stylua 2>$null || echo "stylua already installed or cached"
 
-        # 添加 luarocks 和 cargo 二进制目录到 PATH
-        echo "$env:APPDATA\luarocks\bin" >> $env:GITHUB_PATH
+    - name: Add tools to PATH
+      run: |
         echo "$env:USERPROFILE\.cargo\bin" >> $env:GITHUB_PATH
+        echo "$env:APPDATA\luarocks\bin" >> $env:GITHUB_PATH
 
     - name: Build
       run: |
