@@ -1,0 +1,32 @@
+# =============================================================================
+# Cargo 构建配置
+# 明朝修仙 RPG - 引擎编译优化
+# =============================================================================
+
+[build]
+# 并行编译任务数（默认使用全部 CPU 核心）
+# 注意：部分 cargo 版本设置 jobs=0 会导致错误，故使用默认值
+# jobs = 8
+
+# 增量编译：仅重新编译变更部分（推荐开启）
+incremental = true
+
+# 编译缓存：跨项目共享编译结果，大幅加速重复编译
+# 安装: cargo install sccache
+# 如需禁用，注释下方一行
+rustc-wrapper = "sccache"
+
+# =============================================================================
+# 网络与镜像配置
+# =============================================================================
+
+[registries.crates-io]
+# 国内镜像源（网络不畅时可切换）
+# 注意：只能启用一个镜像源
+# index = "https://mirrors.tuna.tsinghua.edu.cn/git/crates.io-index.git"
+# index = "https://mirrors.ustc.edu.cn/crates.io-index"
+# index = "https://mirrors.aliyun.com/crates.io-index"
+
+[net]
+# 使用系统 Git 下载 crate（更稳定，支持代理）
+git-fetch-with-cli = true

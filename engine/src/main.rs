@@ -29,17 +29,7 @@ use serde::Deserialize;
 use std::path::Path;
 use tracing::info;
 
-mod components;
-mod constants;
-mod core;
-mod lua_api;
-mod plugins;
-mod resources;
-mod utils;
-
-use lua_api::LuaRuntime;
-use plugins::GamePlugin;
-use utils::resolve_asset_root;
+use ming_rpg::{lua_api::LuaRuntime, plugins::GamePlugin, utils::resolve_asset_root};
 
 /// 游戏配置
 #[derive(Debug, Deserialize)]
