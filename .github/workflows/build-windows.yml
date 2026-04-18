@@ -14,7 +14,7 @@ jobs:
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Install Rust
       uses: dtolnay/rust-toolchain@v1
       with:
@@ -39,30 +39,87 @@ jobs:
           ~/.cargo/git
           engine/target
           ~/.xmake
-          ~/.luarocks
-          ~/.cargo/bin
+          ~/tools
         key: ${{ runner.os }}-build-${{ hashFiles('engine/Cargo.lock', 'engine/Cargo.toml', 'xmake.lua') }}
         restore-keys: |
           ${{ runner.os }}-build-
 
-    - name: Install Lua dependencies (Windows)
+    - name: Install Lua
       run: |
-        choco install -y lua luarocks
+        choco install -y lua
+        echo "$env:APPDATA\luarocks\bin" >> $env:GITHUB_PATH
 
-        # 安装 luacheck 和 stylua
-        if ("${{ steps.cache-deps.outputs.cache-hit }}" -ne "true") {
-          luarocks install luacheck --force
-          cargo install stylua --force
+    - name: Install Lua tools
+      shell: pwsh
+      run: |
+        $toolsDir = "$env:USERPROFILE\tools"
+        New-Item -ItemType Directory -Force -Path $toolsDir | Out-Null
+        "$toolsDir" >> $env:GITHUB_PATH
+
+        # 检查缓存是否命中
+        if ((Test-Path "$toolsDir\luacheck.exe") -and (Test-Path "$toolsDir\busted.bat")) {
+          Write-Host "Lua tools found in cache, skipping installation"
+          exit 0
         }
 
-        # 添加 luarocks 和 cargo 二进制目录到 PATH
-        echo "$env:APPDATA\luarocks\bin" >> $env:GITHUB_PATH
-        echo "$env:USERPROFILE\.cargo\bin" >> $env:GITHUB_PATH
+        # 下载 luacheck 预编译二进制
+        Write-Host "Installing luacheck..."
+        $luacheckUrl = "https://github.com/lunarmodules/luacheck/releases/download/v1.2.0/luacheck.exe"
+        Invoke-WebRequest -Uri $luacheckUrl -OutFile "$toolsDir\luacheck.exe"
+        Write-Host "luacheck installed"
+
+        # 安装 busted (纯 Lua 源码方式，不需要编译)
+        Write-Host "Installing busted..."
+        $bustedDir = "$toolsDir\busted"
+        New-Item -ItemType Directory -Force -Path $bustedDir | Out-Null
+
+        $deps = @(
+          @{Name="luafilesystem";Url="https://github.com/keplerproject/luafilesystem/archive/refs/tags/v1_8_0.zip"},
+          @{Name="busted";Url="https://github.com/lunarmodules/busted/archive/refs/tags/v2.2.0.zip"}
+        )
+
+        foreach ($dep in $deps) {
+          $zipFile = "$($dep.Name).zip"
+          Invoke-WebRequest -Uri $dep.Url -OutFile $zipFile
+          Expand-Archive -Path $zipFile -DestinationPath "$bustedDir" -Force
+          Remove-Item $zipFile
+        }
+
+        # 创建 busted 启动脚本
+        $bustedContent = '@echo off' + "`r`n" + "set `"LUA_PATH=$toolsDir\busted\busted-2.2.0\?.lua;$toolsDir\busted\busted-2.2.0\?\init.lua;;`"" + "`r`n" + '"$toolsDir\lua.exe" "$bustedDir\busted-2.2.0\bin\busted" %*'
+        Set-Content -Path "$toolsDir\busted.bat" -Value $bustedContent -Encoding ASCII
+
+        Write-Host "busted installed"
+
+    - name: Install Rust tools
+      shell: pwsh
+      run: |
+        # 安装 sccache（使用预编译二进制避免编译错误）
+        if (!(Get-Command sccache -ErrorAction SilentlyContinue)) {
+          Write-Host "Installing sccache from GitHub releases..."
+          $url = "https://github.com/mozilla/sccache/releases/download/v0.7.7/sccache-v0.7.7-x86_64-pc-windows-msvc.tar.gz"
+          Invoke-WebRequest -Uri $url -OutFile "sccache.tar.gz"
+          tar -xzf sccache.tar.gz
+          Move-Item -Path "sccache-v0.7.7-x86_64-pc-windows-msvc/sccache.exe" -Destination "$env:USERPROFILE\.cargo\bin\" -Force
+          Remove-Item -Recurse -Force "sccache-v0.7.7-x86_64-pc-windows-msvc", "sccache.tar.gz"
+          Write-Host "sccache installed successfully"
+        } else {
+          Write-Host "sccache already installed"
+        }
+        # 安装 stylua
+        if (!(Get-Command stylua -ErrorAction SilentlyContinue)) {
+          Write-Host "Installing stylua..."
+          cargo install stylua
+        } else {
+          Write-Host "stylua already installed"
+        }
+        "$env:USERPROFILE\.cargo\bin" >> $env:GITHUB_PATH
+
+    - name: Configure
+      run: xmake f -m release
 
     - name: Build
-      run: |
-        xmake f -m release
-        xmake b
+      run: xmake b
 
     - name: Fix line endings for Rust files
       run: |

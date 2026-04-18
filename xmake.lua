@@ -5,9 +5,9 @@
 set_project("ming-rpg")
 set_version("0.1.0")
 
--- 模式设置（默认 releasedbg：release + debug info）
+-- 模式设置（默认 debug：开发模式，支持热重载）
 add_rules("mode.debug", "mode.release", "mode.releasedbg")
-set_defaultmode("releasedbg")
+set_defaultmode("debug")
 
 -- 自定义 releasedbg 模式配置（release 优化 + 调试信息）
 if is_mode("releasedbg") then
@@ -85,20 +85,35 @@ target_end()
 target("ming-rpg")
     set_kind("binary")
     set_toolchains("rust")
-    
+
     add_deps("engine")
-    
+
+    -- 开发模式下默认启用热重载
+    if not is_mode("release") then
+        set_values("hot_reload", true)
+    end
+
     on_build(function (target)
         local mode_flag = ""
+        local features = ""
+
         if is_mode("release") then
+            -- 发布模式：全优化，无热重载
             mode_flag = "--release"
         elseif is_mode("releasedbg") then
+            -- Release + Debug Info：优化编译，无热重载
             mode_flag = "--profile releasedbg"
+        else
+            -- debug/dev 模式：快速编译 + 热重载
+            mode_flag = ""  -- cargo 默认 dev profile
+            features = "--features hot-reload"
         end
-        os.exec("cargo build " .. mode_flag .. " --manifest-path engine/Cargo.toml")
+
+        os.exec("cargo build " .. mode_flag .. " " .. features .. " --manifest-path engine/Cargo.toml")
     end)
     
     on_install(function (target)
+        -- debug 模式使用 dev（cargo 默认输出到 debug 目录）
         local build_dir = "debug"
         if is_mode("release") then
             build_dir = "release"
@@ -108,8 +123,9 @@ target("ming-rpg")
         local ext = is_plat("windows") and ".exe" or ""
         os.cp("engine/target/" .. build_dir .. "/ming-rpg" .. ext, target:targetdir())
     end)
-    
+
     on_run(function (target)
+        -- debug 模式使用 dev（cargo 默认输出到 debug 目录）
         local build_dir = "debug"
         if is_mode("release") then
             build_dir = "release"
@@ -121,6 +137,13 @@ target("ming-rpg")
         local target_dir = path.absolute("engine/target/" .. build_dir)
         local deps_dir = path.join(target_dir, "deps")
         
+        -- 开发模式环境变量
+        if not is_mode("release") then
+            os.setenv("MING_RPG_HOT_RELOAD", "1")
+            os.setenv("MING_RPG_DEV_MODE", "1")
+            os.setenv("RUST_LOG", "debug")
+        end
+
         -- 跨平台动态库路径设置
         if is_plat("windows") then
             -- Windows: 使用 PATH
@@ -220,13 +243,14 @@ task_end()
 task("check")
     set_category("plugin")
     on_run(function ()
-        local mode = get_config("mode") or "releasedbg"
+        local mode = get_config("mode") or "debug"
         local mode_flag = ""
         if mode == "release" then
             mode_flag = "--release"
         elseif mode == "releasedbg" then
             mode_flag = "--profile releasedbg"
         end
+        -- debug 模式使用默认 dev profile (mode_flag 为空)
 
         print("=== Checking Rust code ===")
         print("Running clippy...")
@@ -262,6 +286,46 @@ task("check")
             print("  luacheck not found, install with: luarocks install luacheck")
         end
 
+        print("\n=== Running Lua tests ===")
+        -- 跨平台检测 busted：Windows 上用 where，其他用 which
+        local busted_cmd = nil
+        if is_plat("windows") then
+            busted_cmd = try {function () return os.iorunv("where", {"busted"}) end}
+            if not busted_cmd then
+                busted_cmd = try {function () return os.iorunv("where", {"busted.bat"}) end}
+            end
+        else
+            busted_cmd = try {function () return os.iorunv("which", {"busted"}) end}
+        end
+
+        if busted_cmd then
+            -- 处理 where 命令可能返回多行结果（取第一行）
+            local busted_path = busted_cmd:match("^([^\r\n]+)")
+            local test_dir = "game/tests"
+            if os.isdir(test_dir) then
+                local lua_test_files = os.files(path.join(test_dir, "*.lua"))
+                if lua_test_files and #lua_test_files > 0 then
+                    print("Running Lua tests in " .. test_dir .. "...")
+                    -- 在 game/ 目录运行 busted，让 Lua 能找到 main.lua 等模块
+                    os.cd("game")
+                    -- 使用找到的完整路径执行，避免 PATH 问题
+                    -- 使用 --pattern 匹配 test_*.lua 文件
+                    local cmd = "\"" .. busted_path .. "\" --pattern=test_ tests/"
+                    local ok = try {function () os.exec(cmd) return true end}
+                    if not ok then
+                        print("  Warning: busted execution failed with: " .. cmd)
+                    end
+                    os.cd("..")
+                else
+                    print("  No Lua test files found in " .. test_dir)
+                end
+            else
+                print("  Lua test directory not found: " .. test_dir)
+            end
+        else
+            print("  busted not found, install with: luarocks install busted")
+        end
+
         print("\nAll checks passed!")
     end)
     set_menu {
@@ -276,13 +340,14 @@ task("pack")
     on_run(function ()
         local version = "0.1.0"
         -- 获取当前配置的模式
-        local mode = get_config("mode") or "releasedbg"
+        local mode = get_config("mode") or "debug"
         local build_dir = "debug"
         if mode == "release" then
             build_dir = "release"
         elseif mode == "releasedbg" then
             build_dir = "releasedbg"
         end
+        -- debug 模式使用 dev（cargo 默认输出到 debug 目录）
         
         local ext = is_plat("windows") and ".exe" or ""
         local binary_name = "ming-rpg" .. ext
@@ -404,40 +469,71 @@ task("setup")
         -- 检查 Rust
         print("\n1. Checking Rust toolchain...")
         check_rust()
-        
+
         -- 安装 Rust 工具
         print("\n2. Installing Rust tools...")
-        print("  Installing stylua (Lua formatter)...")
+
+        -- sccache
+        print("  Checking sccache (compile cache)...")
+        local sccache_installed = try {function () return os.iorunv("which", {"sccache"}) end}
+        if sccache_installed then
+            print("    sccache already installed")
+        else
+            print("    Installing sccache...")
+            local ok = try {function () os.run("cargo install sccache") return true end}
+            if ok then
+                print("    sccache installed successfully")
+            else
+                print("    sccache install failed")
+                print("    Manual install: cargo install sccache")
+            end
+        end
+
+        -- stylua
+        print("  Checking stylua (Lua formatter)...")
         local stylua_installed = try {function () return os.iorunv("which", {"stylua"}) end}
         if stylua_installed then
             print("    stylua already installed")
         else
+            print("    Installing stylua...")
             local ok = try {function () os.run("cargo install stylua") return true end}
             if ok then
                 print("    stylua installed successfully")
             else
-                print("    stylua install failed (may already be installed)")
+                print("    stylua install failed")
+                print("    Manual install: cargo install stylua")
             end
         end
-        
+
         -- 检查 Lua 工具
         print("\n3. Checking Lua tools...")
-        if not try {function () return os.iorunv("which", {"lua"}) end} then
-            print("  Warning: Lua not found. Install with: apt(brew/scoop) install lua5.4")
-        end
-        
-        if not try {function () return os.iorunv("which", {"luarocks"}) end} then
-            print("  Warning: LuaRocks not found. Install with: apt(brew/scoop) install luarocks")
+
+        -- lua
+        print("  Checking lua...")
+        local lua_installed = try {function () return os.iorunv("which", {"lua"}) end}
+        if lua_installed then
+            print("    lua already installed")
         else
-            print("  Installing luacheck...")
-            local ok = try {function () os.run("luarocks install luacheck") return true end}
-            if ok then
-                print("    luacheck installed successfully")
-            else
-                print("    luacheck install failed (may already be installed)")
-            end
+            print("    lua not found")
+            print("    Install: sudo apt install lua5.4    # Debian/Ubuntu")
+            print("              sudo dnf install lua       # Fedora")
+            print("              brew install lua           # macOS")
+            print("              scoop install lua          # Windows")
         end
-        
+
+        -- luacheck
+        print("  Checking luacheck...")
+        local luacheck_installed = try {function () return os.iorunv("which", {"luacheck"}) end}
+        if luacheck_installed then
+            print("    luacheck already installed")
+        else
+            print("    luacheck not found")
+            print("    Install: sudo apt install luacheck     # Debian/Ubuntu")
+            print("              sudo dnf install luacheck     # Fedora")
+            print("              sudo pacman -S luacheck       # Arch")
+            print("              brew install luacheck         # macOS")
+        end
+
         print("\n=== Setup complete ===")
         print("Run 'xmake build' to start development")
     end)

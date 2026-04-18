@@ -36,7 +36,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        brew install pkg-config lua luacheck stylua
+        brew install pkg-config lua luacheck busted stylua sccache
 
     - name: Install xmake
       uses: xmake-io/github-action-setup-xmake@v1

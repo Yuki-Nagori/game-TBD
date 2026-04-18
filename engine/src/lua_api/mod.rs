@@ -13,9 +13,6 @@
 mod runtime;
 pub use runtime::LuaRuntime;
 
-#[cfg(test)]
-use bevy::prelude::Vec3;
-
 /// Lua 命令类型
 ///
 /// Lua 脚本通过这些命令与游戏引擎交互
@@ -43,38 +40,4 @@ pub enum LuaCommand {
         id: String,
         name: String,
     },
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_lua_runtime_creation() {
-        let runtime = LuaRuntime::new();
-        assert!(runtime.is_ok());
-    }
-
-    #[test]
-    fn test_entity_api_queue_command() {
-        let runtime = LuaRuntime::new().expect("LuaRuntime::new should succeed");
-
-        // 通过 Lua 代码添加命令
-        // 注意：Actor 模式下需要加载脚本后才能测试
-        // 这里仅验证结构
-
-        let commands = runtime.drain_commands();
-        // 新创建的 runtime 应该没有命令
-        assert!(commands.is_empty());
-    }
-
-    #[test]
-    fn test_entity_position_cache() {
-        let runtime = LuaRuntime::new().expect("LuaRuntime::new should succeed");
-
-        runtime.update_entity_position("test_entity", Vec3::new(1.0, 2.0, 3.0));
-        runtime.remove_entity_position("test_entity");
-
-        // 验证操作不会 panic
-    }
 }

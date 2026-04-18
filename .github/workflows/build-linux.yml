@@ -52,14 +52,17 @@ jobs:
           lua5.4 \
           luarocks
 
-        # 安装 luacheck 和 stylua（使用本地安装避免权限问题）
+        # 安装 sccache、luacheck、stylua 和 busted（使用本地安装避免权限问题）
         if [ "${{ steps.cache-deps.outputs.cache-hit }}" != "true" ]; then
+          cargo install sccache --force
           luarocks install --local luacheck --force
+          luarocks install --local busted --force
           cargo install stylua --force
         fi
 
-        # 将 luarocks 和 cargo 二进制目录添加到 PATH
+        # 将 luarocks 和 cargo 二进制目录添加到 PATH（当前 shell 和后续步骤都生效）
         echo "$HOME/.luarocks/bin:$HOME/.cargo/bin" >> $GITHUB_PATH
+        export PATH="$HOME/.luarocks/bin:$HOME/.cargo/bin:$PATH"
 
     - name: Install xmake
       uses: xmake-io/github-action-setup-xmake@v1

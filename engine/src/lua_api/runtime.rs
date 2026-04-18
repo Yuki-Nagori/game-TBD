@@ -37,6 +37,14 @@ enum LuaRequest {
     DrainCommands {
         respond_to: Sender<Vec<LuaCommand>>,
     },
+    Execute {
+        code: String,
+        respond_to: Sender<Result<(), String>>,
+    },
+    ExecuteWithReturn {
+        code: String,
+        respond_to: Sender<Result<String, String>>,
+    },
 }
 
 /// Lua Actor 句柄
@@ -98,10 +106,7 @@ impl LuaRuntime {
 
     /// 调用 Lua 全局函数（仅支持 f32 参数和 () 返回值）
     ///
-    /// 示例:
-    /// ```rust,ignore
-    /// runtime.call_function("update", 0.016f32)?;
-    /// ```
+    /// 示例: `runtime.call_function("update", 0.016f32)?;`
     pub fn call_function(&self, function_name: &str, arg: f32) -> anyhow::Result<()> {
         let args_bytes =
             bincode::serialize(&arg).map_err(|e| anyhow::anyhow!("序列化参数失败: {}", e))?;
@@ -166,6 +171,39 @@ impl LuaRuntime {
 
         rx.recv().unwrap_or_default()
     }
+
+    /// 执行 Lua 代码字符串
+    pub fn execute(&self, code: &str) -> anyhow::Result<()> {
+        let (tx, rx) = channel();
+
+        self.sender
+            .send(LuaRequest::Execute {
+                code: code.to_string(),
+                respond_to: tx,
+            })
+            .map_err(|e| anyhow::anyhow!("发送请求失败: {}", e))?;
+
+        rx.recv()
+            .map_err(|e| anyhow::anyhow!("接收响应失败: {}", e))?
+            .map_err(|e: String| anyhow::anyhow!("Lua 执行失败: {}", e))?;
+        Ok(())
+    }
+
+    /// 执行 Lua 代码字符串并返回结果
+    pub fn execute_with_return(&self, code: &str) -> anyhow::Result<String> {
+        let (tx, rx) = channel();
+
+        self.sender
+            .send(LuaRequest::ExecuteWithReturn {
+                code: code.to_string(),
+                respond_to: tx,
+            })
+            .map_err(|e| anyhow::anyhow!("发送请求失败: {}", e))?;
+
+        rx.recv()
+            .map_err(|e| anyhow::anyhow!("接收响应失败: {}", e))?
+            .map_err(|e: String| anyhow::anyhow!("Lua 执行失败: {}", e))
+    }
 }
 
 /// 内部 Lua Actor
@@ -215,6 +253,14 @@ impl LuaActor {
                         Vec::new()
                     };
                     let _ = respond_to.send(commands);
+                }
+                LuaRequest::Execute { code, respond_to } => {
+                    let result = self.execute_code(&code);
+                    let _ = respond_to.send(result);
+                }
+                LuaRequest::ExecuteWithReturn { code, respond_to } => {
+                    let result = self.execute_code_with_return(&code);
+                    let _ = respond_to.send(result);
                 }
             }
         }
@@ -285,6 +331,39 @@ impl LuaActor {
         serde_json::to_string(&json_value).ok()
     }
 
+    fn execute_code(&self, code: &str) -> Result<(), String> {
+        self.lua
+            .load(code)
+            .exec()
+            .map_err(|e| format!("Lua 执行错误: {}", e))
+    }
+
+    fn execute_code_with_return(&self, code: &str) -> Result<String, String> {
+        let result: mlua::Value = self
+            .lua
+            .load(code)
+            .eval()
+            .map_err(|e| format!("Lua 执行错误: {}", e))?;
+
+        // 将返回值转换为字符串
+        match result {
+            mlua::Value::Nil => Ok("nil".to_string()),
+            mlua::Value::Boolean(b) => Ok(b.to_string()),
+            mlua::Value::Integer(i) => Ok(i.to_string()),
+            mlua::Value::Number(n) => Ok(n.to_string()),
+            mlua::Value::String(s) => Ok(s.to_string_lossy().to_string()),
+            mlua::Value::Table(t) => {
+                // 尝试序列化为 JSON
+                let json_value: serde_json::Value = self
+                    .lua
+                    .from_value(mlua::Value::Table(t))
+                    .map_err(|e| format!("序列化表失败: {}", e))?;
+                Ok(json_value.to_string())
+            }
+            _ => Ok(format!("{:?}", result)),
+        }
+    }
+
     fn register_core_api(lua: &Lua) -> LuaResult<()> {
         // 日志函数（全局）
         lua.globals().set(
@@ -298,7 +377,7 @@ impl LuaActor {
         lua.globals().set(
             "log_debug",
             lua.create_function(|_, msg: String| {
-                info!("[Lua:debug] {}", msg);
+                tracing::debug!("[Lua] {}", msg);
                 Ok(())
             })?,
         )?;

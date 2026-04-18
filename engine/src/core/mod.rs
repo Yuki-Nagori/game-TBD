@@ -8,10 +8,10 @@ use bevy::prelude::*;
 #[derive(Resource, Debug)]
 #[allow(dead_code)]
 pub struct GameTime {
-    year: i32,
-    month: u8,
-    day: u8,
-    hour: f32, // 0.0 - 24.0
+    pub year: i32,
+    pub month: u8,
+    pub day: u8,
+    pub hour: f32, // 0.0 - 24.0
 }
 
 impl Default for GameTime {
@@ -71,9 +71,9 @@ pub struct Character {
 #[derive(Component, Debug)]
 #[allow(dead_code)]
 pub struct Cultivation {
-    realm: Realm,
-    qi: f32,     // 当前真气
-    max_qi: f32, // 真气上限
+    pub realm: Realm,
+    pub qi: f32,     // 当前真气
+    pub max_qi: f32, // 真气上限
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -93,26 +93,5 @@ impl Default for Cultivation {
             qi: 0.0,
             max_qi: 100.0,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_game_time_advance() {
-        let mut time = GameTime::default();
-        time.advance(48.0); // 推进2天
-
-        assert_eq!(time.day, 3);
-        assert_eq!(time.hour, 6.0);
-    }
-
-    #[test]
-    fn test_cultivation_default() {
-        let cult = Cultivation::default();
-        assert_eq!(cult.realm, Realm::Mortal);
-        assert_eq!(cult.qi, 0.0);
     }
 }

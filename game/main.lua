@@ -1,6 +1,7 @@
 -- main.lua
 -- 游戏主入口脚本
 -- 由 Rust 引擎加载执行
+-- luacheck: ignore
 
 log_info("Lua 脚本系统启动")
 

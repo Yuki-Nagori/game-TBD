@@ -29,17 +29,10 @@ use serde::Deserialize;
 use std::path::Path;
 use tracing::info;
 
-mod components;
-mod constants;
-mod core;
-mod lua_api;
-mod plugins;
-mod resources;
-mod utils;
+use ming_rpg::{lua_api::LuaRuntime, plugins::GamePlugin, utils::resolve_asset_root};
 
-use lua_api::LuaRuntime;
-use plugins::GamePlugin;
-use utils::resolve_asset_root;
+#[cfg(feature = "hot-reload")]
+use ming_rpg::plugins::debug_console_plugin::ConsoleLogLayer;
 
 /// 游戏配置
 #[derive(Debug, Deserialize)]
@@ -50,10 +43,22 @@ struct GameConfig {
 }
 
 fn main() -> anyhow::Result<()> {
-    // 初始化日志
-    tracing_subscriber::fmt()
-        .with_env_filter("info,ming_rpg=debug")
-        .init();
+    // 初始化日志（包含调试控制台日志层）
+    #[cfg(feature = "hot-reload")]
+    {
+        use tracing_subscriber::layer::SubscriberExt;
+        let console_layer = ConsoleLogLayer::new();
+        let subscriber = tracing_subscriber::registry()
+            .with(tracing_subscriber::fmt::layer())
+            .with(console_layer);
+        tracing::subscriber::set_global_default(subscriber)?;
+    }
+    #[cfg(not(feature = "hot-reload"))]
+    {
+        tracing_subscriber::fmt()
+            .with_env_filter("info,ming_rpg=debug")
+            .init();
+    }
 
     info!("启动 明朝修仙 RPG...");
 
