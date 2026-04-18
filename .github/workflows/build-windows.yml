@@ -44,6 +44,11 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-build-
 
+    - name: Install Lua
+      run: |
+        choco install -y lua
+        echo "$env:APPDATA\luarocks\bin" >> $env:GITHUB_PATH
+
     - name: Install Lua tools
       shell: pwsh
       run: |
@@ -52,7 +57,7 @@ jobs:
         "$toolsDir" >> $env:GITHUB_PATH
 
         # 检查缓存是否命中
-        if ((Test-Path "$toolsDir\luacheck.exe") -and (Test-Path "$toolsDir\lua.exe") -and (Test-Path "$toolsDir\busted.bat")) {
+        if ((Test-Path "$toolsDir\luacheck.exe") -and (Test-Path "$toolsDir\busted.bat")) {
           Write-Host "Lua tools found in cache, skipping installation"
           exit 0
         }
@@ -63,16 +68,7 @@ jobs:
         Invoke-WebRequest -Uri $luacheckUrl -OutFile "$toolsDir\luacheck.exe"
         Write-Host "luacheck installed"
 
-        # 下载 LuaJIT
-        Write-Host "Installing LuaJIT..."
-        $luajitUrl = "https://github.com/openresty/luajit2/releases/download/v2.1-20240815/luajit2-2.1-20240815-win64.zip"
-        Invoke-WebRequest -Uri $luajitUrl -OutFile "luajit.zip"
-        Expand-Archive -Path "luajit.zip" -DestinationPath "$toolsDir\luajit" -Force
-        Copy-Item "$toolsDir\luajit\luajit.exe" "$toolsDir\lua.exe" -Force
-        Remove-Item "luajit.zip" -ErrorAction SilentlyContinue
-        Write-Host "LuaJIT installed"
-
-        # 安装 busted (LuaJIT + 源码方式)
+        # 安装 busted (纯 Lua 源码方式，不需要编译)
         Write-Host "Installing busted..."
         $bustedDir = "$toolsDir\busted"
         New-Item -ItemType Directory -Force -Path $bustedDir | Out-Null
