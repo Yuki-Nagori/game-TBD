@@ -4,7 +4,9 @@
 //! 支持命令输入、日志查看、性能监控
 
 use bevy::prelude::*;
+use bevy::app::AppExit;
 use bevy_egui::{EguiContexts, EguiPlugin, egui};
+use std::collections::VecDeque;
 
 /// 调试控制台状态
 #[derive(Resource, Default)]
@@ -60,7 +62,7 @@ pub struct PerformanceMonitor {
     /// 是否显示性能面板
     pub visible: bool,
     /// FPS历史
-    pub fps_history: Vec<f32>,
+    pub fps_history: VecDeque<f32>,
     /// 最大历史长度
     pub max_history: usize,
     /// 当前FPS
@@ -130,6 +132,7 @@ fn draw_console(
     mut contexts: EguiContexts,
     mut console: ResMut<DebugConsoleState>,
     lua: Res<crate::lua_api::LuaRuntime>,
+    mut app_exit: EventWriter<AppExit>,
 ) {
     if !console.visible {
         return;
@@ -165,32 +168,31 @@ fn draw_console(
             let text_style = egui::TextStyle::Monospace;
             let row_height = ui.text_style_height(&text_style);
 
+            // 预过滤日志，避免虚拟滚动出现空白间隙
+            let visible_logs: Vec<&LogEntry> = console.logs.iter().filter(|log| {
+                match (console.filter_level, log.level) {
+                    (LogLevel::Debug, _) => true,
+                    (LogLevel::Info, LogLevel::Debug) => false,
+                    (LogLevel::Info, _) => true,
+                    (LogLevel::Warn, LogLevel::Debug | LogLevel::Info) => false,
+                    (LogLevel::Warn, _) => true,
+                    (LogLevel::Error, LogLevel::Error) => true,
+                    (LogLevel::Error, _) => false,
+                }
+            }).collect();
+
             egui::ScrollArea::vertical()
                 .auto_shrink([false; 2])
-                .show_rows(ui, row_height, console.logs.len(), |ui, row_range| {
+                .show_rows(ui, row_height, visible_logs.len(), |ui, row_range| {
                     for i in row_range {
-                        if let Some(log) = console.logs.get(i) {
-                            // 根据筛选级别过滤
-                            let should_show = match (console.filter_level, log.level) {
-                                (LogLevel::Debug, _) => true,
-                                (LogLevel::Info, LogLevel::Debug) => false,
-                                (LogLevel::Info, _) => true,
-                                (LogLevel::Warn, LogLevel::Debug | LogLevel::Info) => false,
-                                (LogLevel::Warn, _) => true,
-                                (LogLevel::Error, LogLevel::Error) => true,
-                                (LogLevel::Error, _) => false,
+                        if let Some(log) = visible_logs.get(i) {
+                            let color = match log.level {
+                                LogLevel::Debug => egui::Color32::GRAY,
+                                LogLevel::Info => egui::Color32::WHITE,
+                                LogLevel::Warn => egui::Color32::YELLOW,
+                                LogLevel::Error => egui::Color32::RED,
                             };
-
-                            if should_show {
-                                let color = match log.level {
-                                    LogLevel::Debug => egui::Color32::GRAY,
-                                    LogLevel::Info => egui::Color32::WHITE,
-                                    LogLevel::Warn => egui::Color32::YELLOW,
-                                    LogLevel::Error => egui::Color32::RED,
-                                };
-
-                                ui.colored_label(color, format!("[{}] {}", log.level, log.message));
-                            }
+                            ui.colored_label(color, format!("[{}] {}", log.level, log.message));
                         }
                     }
                 });
@@ -252,12 +254,11 @@ fn execute_command(
                 return;
             }
             match lua.execute_with_return(&code) {
+                Ok(result) if result == "nil" => {
+                    console.add_log(LogLevel::Info, "执行成功 (无返回值)".to_string());
+                }
                 Ok(result) => {
-                    if result.is_empty() {
-                        console.add_log(LogLevel::Info, "执行成功 (无返回值)".to_string());
-                    } else {
-                        console.add_log(LogLevel::Info, format!("<= {}", result));
-                    }
+                    console.add_log(LogLevel::Info, format!("<= {}", result));
                 }
                 Err(e) => console.add_log(LogLevel::Error, format!("Error: {}", e)),
             }
@@ -271,7 +272,8 @@ fn execute_command(
             console.add_log(LogLevel::Info, "查看右上角性能面板".to_string());
         }
         "quit" | "exit" => {
-            std::process::exit(0);
+            console.add_log(LogLevel::Info, "正在退出...".to_string());
+            app_exit.send(AppExit::Success);
         }
         _ => {
             console.add_log(LogLevel::Warn, format!("未知命令: {}", parts[0]));
@@ -320,10 +322,10 @@ fn update_performance_data(
         perf_monitor.current_fps = fps;
         perf_monitor.frame_time_ms = delta * 1000.0;
 
-        // 添加到历史
-        perf_monitor.fps_history.push(fps);
+        // 添加到历史（使用 VecDeque 避免 O(n) remove(0)）
+        perf_monitor.fps_history.push_back(fps);
         if perf_monitor.fps_history.len() > perf_monitor.max_history {
-            perf_monitor.fps_history.remove(0);
+            perf_monitor.fps_history.pop_front();
         }
 
         // 计算平均FPS
@@ -356,7 +358,6 @@ impl DebugConsoleState {
 
 /// 全局日志接收器（将tracing日志转发到控制台）
 pub struct ConsoleLogLayer {
-    #[allow(dead_code)]
     sender: std::sync::mpsc::Sender<LogEntry>,
 }
 
@@ -364,5 +365,56 @@ impl ConsoleLogLayer {
     pub fn new() -> (Self, std::sync::mpsc::Receiver<LogEntry>) {
         let (tx, rx) = std::sync::mpsc::channel();
         (Self { sender: tx }, rx)
+    }
+}
+
+impl<S> tracing_subscriber::Layer<S> for ConsoleLogLayer
+where
+    S: tracing::Subscriber,
+{
+    fn on_event(
+        &self,
+        event: &tracing::Event<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        let mut message = String::new();
+        event.record(&mut MessageVisitor(&mut message));
+
+        let level = match *event.metadata().level() {
+            tracing::Level::ERROR => LogLevel::Error,
+            tracing::Level::WARN => LogLevel::Warn,
+            tracing::Level::INFO => LogLevel::Info,
+            _ => LogLevel::Debug,
+        };
+
+        let entry = LogEntry {
+            level,
+            message,
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs_f64(),
+        };
+
+        // 忽略发送失败（接收端可能已被丢弃）
+        let _ = self.sender.send(entry);
+    }
+}
+
+/// 用于从tracing事件中提取消息
+struct MessageVisitor<'a>(&'a mut String);
+
+impl<'a> tracing::field::Visit for MessageVisitor<'a> {
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        if field.name() == "message" {
+            use std::fmt::Write;
+            let _ = write!(self.0, "{:?}", value);
+        }
+    }
+
+    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+        if field.name() == "message" {
+            self.0.push_str(value);
+        }
     }
 }
