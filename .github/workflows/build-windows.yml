@@ -89,11 +89,9 @@ jobs:
           Remove-Item $zipFile
         }
 
-        @"
-@echo off
-set "LUA_PATH=$toolsDir\busted\busted-2.2.0\?.lua;$toolsDir\busted\busted-2.2.0\?\init.lua;;"
-"$toolsDir\lua.exe" "$bustedDir\busted-2.2.0\bin\busted" %*
-"@ | Set-Content -Path "$toolsDir\busted.bat" -Encoding ASCII
+        # 创建 busted 启动脚本
+        $bustedContent = '@echo off' + "`r`n" + "set `"LUA_PATH=$toolsDir\busted\busted-2.2.0\?.lua;$toolsDir\busted\busted-2.2.0\?\init.lua;;`"" + "`r`n" + '"$toolsDir\lua.exe" "$bustedDir\busted-2.2.0\bin\busted" %*'
+        Set-Content -Path "$toolsDir\busted.bat" -Value $bustedContent -Encoding ASCII
 
         Write-Host "busted installed"
 
