@@ -3,8 +3,8 @@
 //! 游戏中按 `~` 键呼出调试控制台
 //! 支持命令输入、日志查看、性能监控
 
-use bevy::prelude::*;
 use bevy::app::AppExit;
+use bevy::prelude::*;
 use bevy_egui::{EguiContexts, EguiPlugin, egui};
 use std::collections::VecDeque;
 
@@ -169,8 +169,10 @@ fn draw_console(
             let row_height = ui.text_style_height(&text_style);
 
             // 预过滤日志，避免虚拟滚动出现空白间隙
-            let visible_logs: Vec<&LogEntry> = console.logs.iter().filter(|log| {
-                match (console.filter_level, log.level) {
+            let visible_logs: Vec<&LogEntry> = console
+                .logs
+                .iter()
+                .filter(|log| match (console.filter_level, log.level) {
                     (LogLevel::Debug, _) => true,
                     (LogLevel::Info, LogLevel::Debug) => false,
                     (LogLevel::Info, _) => true,
@@ -178,8 +180,8 @@ fn draw_console(
                     (LogLevel::Warn, _) => true,
                     (LogLevel::Error, LogLevel::Error) => true,
                     (LogLevel::Error, _) => false,
-                }
-            }).collect();
+                })
+                .collect();
 
             egui::ScrollArea::vertical()
                 .auto_shrink([false; 2])

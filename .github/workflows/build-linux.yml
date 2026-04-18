@@ -52,10 +52,11 @@ jobs:
           lua5.4 \
           luarocks
 
-        # 安装 sccache、luacheck 和 stylua（使用本地安装避免权限问题）
+        # 安装 sccache、luacheck、stylua 和 busted（使用本地安装避免权限问题）
         if [ "${{ steps.cache-deps.outputs.cache-hit }}" != "true" ]; then
           cargo install sccache --force
           luarocks install --local luacheck --force
+          luarocks install --local busted --force
           cargo install stylua --force
         fi
 

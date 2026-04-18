@@ -14,7 +14,7 @@ jobs:
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Install Rust
       uses: dtolnay/rust-toolchain@v1
       with:
@@ -45,24 +45,27 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-build-
 
-    - name: Install Lua dependencies (Windows)
+    - name: Install Lua
       run: |
         choco install -y lua luarocks
-
-        # 安装 sccache、luacheck 和 stylua（缓存未命中时执行）
-        cargo install sccache 2>$null || echo "sccache already installed or cached"
-        luarocks install luacheck
-        cargo install stylua 2>$null || echo "stylua already installed or cached"
-
-    - name: Add tools to PATH
-      run: |
-        echo "$env:USERPROFILE\.cargo\bin" >> $env:GITHUB_PATH
         echo "$env:APPDATA\luarocks\bin" >> $env:GITHUB_PATH
 
-    - name: Build
+    - name: Install Rust tools
       run: |
-        xmake f -m release
-        xmake b
+        cargo install sccache 2>$null || echo "sccache already installed or cached"
+        cargo install stylua 2>$null || echo "stylua already installed or cached"
+        echo "$env:USERPROFILE\.cargo\bin" >> $env:GITHUB_PATH
+
+    - name: Configure
+      run: xmake f -m release
+
+    - name: Install Lua tools
+      run: |
+        luarocks install luacheck
+        luarocks install busted
+
+    - name: Build
+      run: xmake b
 
     - name: Fix line endings for Rust files
       run: |
