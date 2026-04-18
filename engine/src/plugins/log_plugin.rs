@@ -16,7 +16,7 @@ use tracing_subscriber::{
 };
 
 /// 日志配置
-#[derive(Resource)]
+#[derive(Resource, Clone)]
 pub struct LogConfig {
     /// 日志文件路径
     pub log_file: PathBuf,
@@ -69,8 +69,8 @@ impl From<LogLevel> for Level {
 
 /// 日志文件写入器
 pub struct FileLogWriter {
-    file: Mutex<File>,
-    current_size: Mutex<u64>,
+    file: Arc<Mutex<File>>,
+    current_size: Arc<Mutex<u64>>,
     max_size: u64,
     log_dir: PathBuf,
     base_name: String,
@@ -94,8 +94,8 @@ impl fmt::MakeWriter<'_> for FileLogWriter {
 
     fn make_writer(&self) -> Self::Writer {
         FileLogWriter {
-            file: Mutex::new(self.file.lock().unwrap().try_clone().unwrap()),
-            current_size: Mutex::new(*self.current_size.lock().unwrap()),
+            file: Arc::clone(&self.file),
+            current_size: Arc::clone(&self.current_size),
             max_size: self.max_size,
             log_dir: self.log_dir.clone(),
             base_name: self.base_name.clone(),
@@ -122,8 +122,8 @@ impl FileLogWriter {
         let current_size = metadata.len();
 
         Ok(Self {
-            file: Mutex::new(file),
-            current_size: Mutex::new(current_size),
+            file: Arc::new(Mutex::new(file)),
+            current_size: Arc::new(Mutex::new(current_size)),
             max_size: config.max_file_size_mb * 1024 * 1024,
             log_dir: log_dir.to_path_buf(),
             base_name,
@@ -232,12 +232,12 @@ pub struct LogPlugin;
 impl Plugin for LogPlugin {
     fn build(&self, app: &mut App) {
         let config = LogConfig::default();
-        
-        if let Err(e) = init_logging(config) {
+
+        if let Err(e) = init_logging(config.clone()) {
             eprintln!("日志系统初始化失败: {}", e);
         }
-        
-        app.insert_resource(LogConfig::default());
+
+        app.insert_resource(config);
     }
 }
 

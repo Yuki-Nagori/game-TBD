@@ -377,7 +377,7 @@ impl LuaActor {
         lua.globals().set(
             "log_debug",
             lua.create_function(|_, msg: String| {
-                info!("[Lua:debug] {}", msg);
+                tracing::debug!("[Lua] {}", msg);
                 Ok(())
             })?,
         )?;

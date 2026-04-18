@@ -53,14 +53,19 @@ jobs:
     - name: Install Rust tools
       shell: pwsh
       run: |
-        # 检查并安装 sccache
+        # 安装 sccache（使用预编译二进制避免编译错误）
         if (!(Get-Command sccache -ErrorAction SilentlyContinue)) {
-          Write-Host "Installing sccache..."
-          cargo install sccache
+          Write-Host "Installing sccache from GitHub releases..."
+          $url = "https://github.com/mozilla/sccache/releases/download/v0.7.7/sccache-v0.7.7-x86_64-pc-windows-msvc.tar.gz"
+          Invoke-WebRequest -Uri $url -OutFile "sccache.tar.gz"
+          tar -xzf sccache.tar.gz
+          Move-Item -Path "sccache-v0.7.7-x86_64-pc-windows-msvc/sccache.exe" -Destination "$env:USERPROFILE\.cargo\bin\" -Force
+          Remove-Item -Recurse -Force "sccache-v0.7.7-x86_64-pc-windows-msvc", "sccache.tar.gz"
+          Write-Host "sccache installed successfully"
         } else {
           Write-Host "sccache already installed"
         }
-        # 检查并安装 stylua
+        # 安装 stylua
         if (!(Get-Command stylua -ErrorAction SilentlyContinue)) {
           Write-Host "Installing stylua..."
           cargo install stylua

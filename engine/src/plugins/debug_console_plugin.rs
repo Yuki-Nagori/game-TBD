@@ -215,7 +215,7 @@ fn draw_console(
             if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                 let command = console.input_buffer.clone();
                 if !command.is_empty() {
-                    execute_command(&command, &mut console, &lua);
+                    execute_command(&command, &mut console, &lua, &mut app_exit);
                     console.history.push(command);
                     console.input_buffer.clear();
                 }
@@ -230,6 +230,7 @@ fn execute_command(
     command: &str,
     console: &mut DebugConsoleState,
     lua: &crate::lua_api::LuaRuntime,
+    app_exit: &mut EventWriter<AppExit>,
 ) {
     console.add_log(LogLevel::Info, format!("> {}", command));
 
