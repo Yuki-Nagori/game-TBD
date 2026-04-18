@@ -61,6 +61,8 @@ jobs:
 
     - name: Build
       run: |
+        Remove-Item Env:RUSTC_WRAPPER -ErrorAction SilentlyContinue
+        Remove-Item Env:SCCACHE_GHA_ENABLED -ErrorAction SilentlyContinue
         xmake f -m release
         xmake b
 

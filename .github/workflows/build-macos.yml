@@ -45,6 +45,8 @@ jobs:
     
     - name: Build
       run: |
+        unset RUSTC_WRAPPER
+        unset SCCACHE_GHA_ENABLED
         xmake f -m release
         xmake b
 
