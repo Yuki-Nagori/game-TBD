@@ -60,8 +60,9 @@ jobs:
           cargo install stylua --force
         fi
 
-        # 将 luarocks 和 cargo 二进制目录添加到 PATH
+        # 将 luarocks 和 cargo 二进制目录添加到 PATH（当前 shell 和后续步骤都生效）
         echo "$HOME/.luarocks/bin:$HOME/.cargo/bin" >> $GITHUB_PATH
+        export PATH="$HOME/.luarocks/bin:$HOME/.cargo/bin:$PATH"
 
     - name: Install xmake
       uses: xmake-io/github-action-setup-xmake@v1

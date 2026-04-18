@@ -39,16 +39,63 @@ jobs:
           ~/.cargo/git
           engine/target
           ~/.xmake
-          ~/.luarocks
-          ~/.cargo/bin
+          ~/tools
         key: ${{ runner.os }}-build-${{ hashFiles('engine/Cargo.lock', 'engine/Cargo.toml', 'xmake.lua') }}
         restore-keys: |
           ${{ runner.os }}-build-
 
-    - name: Install Lua
+    - name: Install Lua tools
+      shell: pwsh
       run: |
-        choco install -y lua luarocks
-        echo "$env:APPDATA\luarocks\bin" >> $env:GITHUB_PATH
+        $toolsDir = "$env:USERPROFILE\tools"
+        New-Item -ItemType Directory -Force -Path $toolsDir | Out-Null
+        "$toolsDir" >> $env:GITHUB_PATH
+
+        # 检查缓存是否命中
+        if ((Test-Path "$toolsDir\luacheck.exe") -and (Test-Path "$toolsDir\lua.exe") -and (Test-Path "$toolsDir\busted.bat")) {
+          Write-Host "Lua tools found in cache, skipping installation"
+          exit 0
+        }
+
+        # 下载 luacheck 预编译二进制
+        Write-Host "Installing luacheck..."
+        $luacheckUrl = "https://github.com/lunarmodules/luacheck/releases/download/v1.2.0/luacheck.exe"
+        Invoke-WebRequest -Uri $luacheckUrl -OutFile "$toolsDir\luacheck.exe"
+        Write-Host "luacheck installed"
+
+        # 下载 LuaJIT
+        Write-Host "Installing LuaJIT..."
+        $luajitUrl = "https://github.com/openresty/luajit2/releases/download/v2.1-20240815/luajit2-2.1-20240815-win64.zip"
+        Invoke-WebRequest -Uri $luajitUrl -OutFile "luajit.zip"
+        Expand-Archive -Path "luajit.zip" -DestinationPath "$toolsDir\luajit" -Force
+        Copy-Item "$toolsDir\luajit\luajit.exe" "$toolsDir\lua.exe" -Force
+        Remove-Item "luajit.zip" -ErrorAction SilentlyContinue
+        Write-Host "LuaJIT installed"
+
+        # 安装 busted (LuaJIT + 源码方式)
+        Write-Host "Installing busted..."
+        $bustedDir = "$toolsDir\busted"
+        New-Item -ItemType Directory -Force -Path $bustedDir | Out-Null
+
+        $deps = @(
+          @{Name="luafilesystem";Url="https://github.com/keplerproject/luafilesystem/archive/refs/tags/v1_8_0.zip"},
+          @{Name="busted";Url="https://github.com/lunarmodules/busted/archive/refs/tags/v2.2.0.zip"}
+        )
+
+        foreach ($dep in $deps) {
+          $zipFile = "$($dep.Name).zip"
+          Invoke-WebRequest -Uri $dep.Url -OutFile $zipFile
+          Expand-Archive -Path $zipFile -DestinationPath "$bustedDir" -Force
+          Remove-Item $zipFile
+        }
+
+        @"
+@echo off
+set "LUA_PATH=$toolsDir\busted\busted-2.2.0\?.lua;$toolsDir\busted\busted-2.2.0\?\init.lua;;"
+"$toolsDir\lua.exe" "$bustedDir\busted-2.2.0\bin\busted" %*
+"@ | Set-Content -Path "$toolsDir\busted.bat" -Encoding ASCII
+
+        Write-Host "busted installed"
 
     - name: Install Rust tools
       shell: pwsh
@@ -76,11 +123,6 @@ jobs:
 
     - name: Configure
       run: xmake f -m release
-
-    - name: Install Lua tools
-      run: |
-        luarocks install luacheck
-        luarocks install busted
 
     - name: Build
       run: xmake b
