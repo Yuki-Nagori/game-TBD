@@ -102,6 +102,7 @@ impl Plugin for DebugConsolePlugin {
                     draw_console,
                     draw_performance_monitor,
                     update_performance_data,
+                    receive_logs,
                 ),
             );
 
@@ -185,6 +186,10 @@ fn draw_console(
                 })
                 .collect();
 
+            // 计算是否应该在渲染后滚动到底部
+            let should_scroll_to_bottom = console.auto_scroll && !visible_logs.is_empty();
+            let last_index = visible_logs.len().saturating_sub(1);
+
             egui::ScrollArea::vertical()
                 .auto_shrink([false; 2])
                 .show_rows(ui, row_height, visible_logs.len(), |ui, row_range| {
@@ -196,15 +201,15 @@ fn draw_console(
                                 LogLevel::Warn => egui::Color32::YELLOW,
                                 LogLevel::Error => egui::Color32::RED,
                             };
-                            ui.colored_label(color, format!("[{}] {}", log.level, log.message));
+                            let response =
+                                ui.colored_label(color, format!("[{}] {}", log.level, log.message));
+                            // 如果启用自动滚动且这是最后一行，滚动到底部
+                            if should_scroll_to_bottom && i == last_index {
+                                response.scroll_to_me(Some(egui::Align::BOTTOM));
+                            }
                         }
                     }
                 });
-
-            // 自动滚动到底部
-            if console.auto_scroll {
-                // egui 滚动到底部的逻辑
-            }
 
             ui.separator();
 
@@ -223,6 +228,14 @@ fn draw_console(
                 response.request_focus();
             }
         });
+}
+
+/// Lua 执行结果
+enum LuaResult {
+    /// 无返回值（nil）
+    Nil,
+    /// 有返回值
+    Value(String),
 }
 
 /// 执行控制台命令
@@ -259,11 +272,21 @@ fn execute_command(
                 return;
             }
             match lua.execute_with_return(&code) {
-                Ok(result) if result == "nil" => {
-                    console.add_log(LogLevel::Info, "执行成功 (无返回值)".to_string());
-                }
-                Ok(result) => {
-                    console.add_log(LogLevel::Info, format!("<= {}", result));
+                Ok(result_str) => {
+                    // 解析返回结果类型
+                    let result = if result_str == "nil" {
+                        LuaResult::Nil
+                    } else {
+                        LuaResult::Value(result_str)
+                    };
+                    match result {
+                        LuaResult::Nil => {
+                            console.add_log(LogLevel::Info, "执行成功 (无返回值)".to_string());
+                        }
+                        LuaResult::Value(v) => {
+                            console.add_log(LogLevel::Info, format!("<= {}", v));
+                        }
+                    }
                 }
                 Err(e) => console.add_log(LogLevel::Error, format!("Error: {}", e)),
             }
@@ -278,7 +301,7 @@ fn execute_command(
         }
         "quit" | "exit" => {
             console.add_log(LogLevel::Info, "正在退出...".to_string());
-            app_exit.send(AppExit::Success);
+            app_exit.send(AppExit);
         }
         _ => {
             console.add_log(LogLevel::Warn, format!("未知命令: {}", parts[0]));
@@ -307,9 +330,13 @@ fn draw_performance_monitor(mut contexts: EguiContexts, perf_monitor: Res<Perfor
             // FPS历史 (文本显示)
             if !perf_monitor.fps_history.is_empty() {
                 ui.separator();
-                let avg_fps: f32 = perf_monitor.fps_history.iter().sum::<f32>()
-                    / perf_monitor.fps_history.len() as f32;
-                ui.label(format!("平均 FPS: {:.1}", avg_fps));
+                // 检查历史记录非空后再计算平均FPS，避免除零
+                let history_len = perf_monitor.fps_history.len();
+                if history_len > 0 {
+                    let avg_fps: f32 =
+                        perf_monitor.fps_history.iter().sum::<f32>() / history_len as f32;
+                    ui.label(format!("平均 FPS: {:.1}", avg_fps));
+                }
             }
         });
 }
@@ -333,11 +360,9 @@ fn update_performance_data(
             perf_monitor.fps_history.pop_front();
         }
 
-        // 计算平均FPS
-        if !perf_monitor.fps_history.is_empty() {
-            let sum: f32 = perf_monitor.fps_history.iter().sum();
-            perf_monitor.avg_fps = sum / perf_monitor.fps_history.len() as f32;
-        }
+        // 计算平均FPS（历史记录在push_back后至少有一个元素）
+        let sum: f32 = perf_monitor.fps_history.iter().sum();
+        perf_monitor.avg_fps = sum / perf_monitor.fps_history.len().max(1) as f32;
     }
 
     // 更新实体数量
@@ -366,10 +391,28 @@ pub struct ConsoleLogLayer {
     sender: std::sync::mpsc::Sender<LogEntry>,
 }
 
+/// 存储 Receiver 的全局静态变量
+use std::sync::OnceLock;
+static LOG_RECEIVER: OnceLock<std::sync::Mutex<std::sync::mpsc::Receiver<LogEntry>>> =
+    OnceLock::new();
+
 impl ConsoleLogLayer {
-    pub fn new() -> (Self, std::sync::mpsc::Receiver<LogEntry>) {
+    pub fn new() -> Self {
         let (tx, rx) = std::sync::mpsc::channel();
-        (Self { sender: tx }, rx)
+        // 存储 receiver 到全局静态变量
+        let _ = LOG_RECEIVER.set(std::sync::Mutex::new(rx));
+        Self { sender: tx }
+    }
+}
+
+/// 接收日志系统：将 tracing 日志转发到 DebugConsoleState
+fn receive_logs(mut console: ResMut<DebugConsoleState>) {
+    if let Some(receiver) = LOG_RECEIVER.get() {
+        let rx = receiver.lock().unwrap();
+        // 非阻塞地接收所有可用日志
+        while let Ok(entry) = rx.try_recv() {
+            console.add_log(entry.level, entry.message);
+        }
     }
 }
 
@@ -384,6 +427,11 @@ where
     ) {
         let mut message = String::new();
         event.record(&mut MessageVisitor(&mut message));
+
+        // 如果没有提取到消息（空字符串），使用事件名称
+        if message.is_empty() {
+            message = event.metadata().name().to_string();
+        }
 
         let level = match *event.metadata().level() {
             tracing::Level::ERROR => LogLevel::Error,
@@ -412,8 +460,11 @@ struct MessageVisitor<'a>(&'a mut String);
 impl<'a> tracing::field::Visit for MessageVisitor<'a> {
     fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
         if field.name() == "message" {
-            use std::fmt::Write;
-            let _ = write!(self.0, "{:?}", value);
+            // 优先尝试record_str，避免Debug格式化的引号
+            // 如果值实现了Display，这里会被调用两次：
+            // 1. 第一次尝试record_str（如果值是字符串）
+            // 2. 如果没有实现record_str，则调用record_debug
+            // 因此这里先不处理，让record_str优先
         }
     }
 

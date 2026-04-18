@@ -217,6 +217,7 @@
   - [x] 分级日志（trace/debug/info/warn/error）
   - [x] 日志文件输出
   - [x] 游戏内日志查看器（控制台内）
+  - [x] ConsoleLogLayer 集成（tracing 日志转发到游戏内控制台）
 
 #### 2.5.2 资源管理
 - [ ] **资源加载系统**
@@ -269,6 +270,7 @@
 |:---|:---|:---|:---|
 | 热重载系统 | 🔴 高 | ✅ 完成 | Lua/配置自动重载，F5手动重载 |
 | 调试控制台 | 🔴 高 | ✅ 完成 | ~键呼出，命令执行，性能监控 |
+| 游戏内日志查看器 | 🔴 高 | ✅ 完成 | tracing 日志转发到控制台面板 |
 | 日志文件输出 | 🟡 中 | ✅ 完成 | 分级日志，自动轮转 |
 | 单元测试框架 | 🟡 中 | ✅ 完成 | Lua测试基础，Rust测试占位 |
 | 性能监控 | 🟢 低 | ✅ 完成 | FPS图表，实体计数，帧时间 |
@@ -404,6 +406,15 @@
 - **物理引擎**：集成 Rapier3D，玩家和场景均有碰撞体
 - **代码重构**：main.rs 拆分为 plugins/ 模块，遵循 Bevy 插件最佳实践
 - **人物移动**：使用 KinematicCharacterController 实现带碰撞的移动
+
+### 2026-04-19 ConsoleLogLayer 修复
+- **问题**：`ConsoleLogLayer` 实现了 `tracing_subscriber::Layer` 但从未注册，调试控制台日志面板始终为空
+- **解决方案**：
+  - 使用 `OnceLock` 全局静态变量存储 `Receiver<LogEntry>`
+  - `ConsoleLogLayer::new()` 创建 layer 并存储 receiver
+  - 添加 `receive_logs` Bevy 系统，每帧非阻塞接收日志并写入 `DebugConsoleState.logs`
+  - hot-reload 模式下用 `tracing_subscriber::registry()` 组合 `ConsoleLogLayer` 和 fmt layer
+- **结果**：tracing 日志现在正确显示在游戏内调试控制台
 
 ### 2026-04-18 Phase 2 最终完成与配置系统
 - **配置架构**：游戏配置分离到 Lua，支持无需重编译调整参数
