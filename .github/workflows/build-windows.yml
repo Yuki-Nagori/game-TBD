@@ -51,10 +51,13 @@ jobs:
         echo "$env:APPDATA\luarocks\bin" >> $env:GITHUB_PATH
 
     - name: Install Rust tools
+      shell: pwsh
       run: |
-        cargo install sccache 2>$null || echo "sccache already installed or cached"
-        cargo install stylua 2>$null || echo "stylua already installed or cached"
-        echo "$env:USERPROFILE\.cargo\bin" >> $env:GITHUB_PATH
+        cargo install sccache 2>$null
+        if ($LASTEXITCODE -ne 0) { Write-Host "sccache already installed or cached" }
+        cargo install stylua 2>$null
+        if ($LASTEXITCODE -ne 0) { Write-Host "stylua already installed or cached" }
+        "$env:USERPROFILE\.cargo\bin" >> $env:GITHUB_PATH
 
     - name: Configure
       run: xmake f -m release
