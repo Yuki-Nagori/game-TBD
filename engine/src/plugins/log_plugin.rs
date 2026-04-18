@@ -6,7 +6,7 @@ use bevy::prelude::*;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tracing::{Level, Subscriber};
 use tracing_subscriber::{
     fmt::{self, format::Writer, time::FormatTime},
@@ -74,6 +74,33 @@ pub struct FileLogWriter {
     max_size: u64,
     log_dir: PathBuf,
     base_name: String,
+}
+
+impl std::io::Write for FileLogWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let message = String::from_utf8_lossy(buf);
+        self.write(&message).map_err(|e| std::io::Error::other(e))?;
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        let mut file = self.file.lock().unwrap();
+        file.flush()
+    }
+}
+
+impl fmt::MakeWriter<'_> for FileLogWriter {
+    type Writer = FileLogWriter;
+
+    fn make_writer(&self) -> Self::Writer {
+        FileLogWriter {
+            file: Mutex::new(self.file.lock().unwrap().try_clone().unwrap()),
+            current_size: Mutex::new(*self.current_size.lock().unwrap()),
+            max_size: self.max_size,
+            log_dir: self.log_dir.clone(),
+            base_name: self.base_name.clone(),
+        }
+    }
 }
 
 impl FileLogWriter {
@@ -159,36 +186,43 @@ impl FileLogWriter {
 
 /// 初始化日志系统
 pub fn init_logging(config: LogConfig) -> anyhow::Result<()> {
-    // 创建文件日志写入器
-    let file_writer = if config.file_output {
-        Some(FileLogWriter::new(&config)?)
-    } else {
-        None
-    };
-
     // 设置过滤器
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("info,ming_rpg=debug"));
 
-    // 创建格式化层
-    let fmt_layer = fmt::layer()
-        .with_writer(move || {
-            // 这里可以返回一个实现Write的自定义writer
-            std::io::stdout()
-        })
+    // 控制台日志层
+    let console_layer = fmt::layer()
+        .with_writer(std::io::stdout)
         .with_target(false)
         .with_thread_ids(false)
         .with_thread_names(false);
 
-    // 组合日志层
-    let subscriber = tracing_subscriber::registry()
-        .with(filter)
-        .with(fmt_layer);
-
     // 设置全局订阅者
-    tracing::subscriber::set_global_default(subscriber)?;
+    if config.file_output {
+        // 创建文件日志写入器
+        let file_writer = FileLogWriter::new(&config)?;
+        let file_layer = fmt::layer()
+            .with_writer(Arc::new(file_writer))
+            .with_target(false)
+            .with_thread_ids(false)
+            .with_thread_names(false);
 
-    info!("日志系统初始化完成");
+        let subscriber = tracing_subscriber::registry()
+            .with(filter)
+            .with(console_layer)
+            .with(file_layer);
+
+        tracing::subscriber::set_global_default(subscriber)?;
+        info!("日志系统初始化完成（控制台+文件）");
+    } else {
+        let subscriber = tracing_subscriber::registry()
+            .with(filter)
+            .with(console_layer);
+
+        tracing::subscriber::set_global_default(subscriber)?;
+        info!("日志系统初始化完成（仅控制台）");
+    }
+
     Ok(())
 }
 

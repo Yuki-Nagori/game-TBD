@@ -18,7 +18,7 @@ pub struct DebugConsoleState {
     /// 命令历史
     pub history: Vec<String>,
     /// 日志缓冲区
-    pub logs: Vec<LogEntry>,
+    pub logs: VecDeque<LogEntry>,
     /// 最大日志条数
     pub max_logs: usize,
     /// 自动滚动
@@ -89,8 +89,10 @@ impl Plugin for DebugConsolePlugin {
             return;
         }
 
-        app.add_plugins(EguiPlugin)
-            .init_resource::<DebugConsoleState>()
+        if !app.is_plugin_added::<EguiPlugin>() {
+            app.add_plugins(EguiPlugin);
+        }
+        app.init_resource::<DebugConsoleState>()
             .init_resource::<PerformanceMonitor>()
             .add_systems(Startup, setup_console)
             .add_systems(
@@ -349,11 +351,11 @@ impl DebugConsoleState {
             .unwrap_or_default()
             .as_secs_f64();
 
-        self.logs.push(LogEntry { level, message, timestamp });
+        self.logs.push_back(LogEntry { level, message, timestamp });
 
-        // 限制日志数量
+        // 限制日志数量（使用 pop_front 避免 O(n) remove(0)）
         if self.logs.len() > self.max_logs {
-            self.logs.remove(0);
+            self.logs.pop_front();
         }
     }
 }

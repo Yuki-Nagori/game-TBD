@@ -53,10 +53,20 @@ jobs:
     - name: Install Rust tools
       shell: pwsh
       run: |
-        cargo install sccache 2>$null
-        if ($LASTEXITCODE -ne 0) { Write-Host "sccache already installed or cached" }
-        cargo install stylua 2>$null
-        if ($LASTEXITCODE -ne 0) { Write-Host "stylua already installed or cached" }
+        # 检查并安装 sccache
+        if (!(Get-Command sccache -ErrorAction SilentlyContinue)) {
+          Write-Host "Installing sccache..."
+          cargo install sccache
+        } else {
+          Write-Host "sccache already installed"
+        }
+        # 检查并安装 stylua
+        if (!(Get-Command stylua -ErrorAction SilentlyContinue)) {
+          Write-Host "Installing stylua..."
+          cargo install stylua
+        } else {
+          Write-Host "stylua already installed"
+        }
         "$env:USERPROFILE\.cargo\bin" >> $env:GITHUB_PATH
 
     - name: Configure
