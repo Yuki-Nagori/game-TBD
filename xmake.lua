@@ -485,6 +485,7 @@ task("setup")
                 print("    sccache installed successfully")
             else
                 print("    sccache install failed")
+                print("    Manual install: cargo install sccache")
             end
         end
 
@@ -500,27 +501,39 @@ task("setup")
                 print("    stylua installed successfully")
             else
                 print("    stylua install failed")
+                print("    Manual install: cargo install stylua")
             end
         end
 
         -- 检查 Lua 工具
         print("\n3. Checking Lua tools...")
-        if not try {function () return os.iorunv("which", {"lua"}) end} then
-            print("     Lua not found")
-            print("     Install: sudo apt install lua5.4    # Debian/Ubuntu")
-            print("               sudo dnf install lua       # Fedora")
-            print("               brew install lua           # macOS")
-            print("               scoop install lua          # Windows")
+
+        -- lua
+        print("  Checking lua...")
+        local lua_installed = try {function () return os.iorunv("which", {"lua"}) end}
+        if lua_installed then
+            print("    lua already installed")
+        else
+            print("    lua not found")
+            print("    Install: sudo apt install lua5.4    # Debian/Ubuntu")
+            print("              sudo dnf install lua       # Fedora")
+            print("              brew install lua           # macOS")
+            print("              scoop install lua          # Windows")
         end
 
-        if not try {function () return os.iorunv("which", {"luacheck"}) end} then
-            print("     luacheck not found")
-            print("     Install: sudo apt install luacheck     # Debian/Ubuntu")
-            print("               sudo dnf install luacheck     # Fedora")
-            print("               sudo pacman -S luacheck       # Arch")
-            print("               brew install luacheck         # macOS")
+        -- luacheck
+        print("  Checking luacheck...")
+        local luacheck_installed = try {function () return os.iorunv("which", {"luacheck"}) end}
+        if luacheck_installed then
+            print("    luacheck already installed")
+        else
+            print("    luacheck not found")
+            print("    Install: sudo apt install luacheck     # Debian/Ubuntu")
+            print("              sudo dnf install luacheck     # Fedora")
+            print("              sudo pacman -S luacheck       # Arch")
+            print("              brew install luacheck         # macOS")
         end
-        
+
         print("\n=== Setup complete ===")
         print("Run 'xmake build' to start development")
     end)
