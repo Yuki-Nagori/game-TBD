@@ -219,7 +219,33 @@
   - [x] 游戏内日志查看器（控制台内）
   - [x] ConsoleLogLayer 集成（tracing 日志转发到游戏内控制台）
 
-#### 2.5.2 资源管理
+#### 2.5.2 Bevy 0.14 升级
+**目标**：将引擎从 Bevy 0.13 升级到 0.14，提前解决技术债务
+
+**动机**：
+- 0.13→0.14 破坏性变更较大，越早升级成本越低
+- Phase 2.5 代码量可控，适合大规模重构
+- 避免在 Phase 3+ 功能开发时被迫中断升级
+
+**升级范围**：
+- [ ] **依赖升级**
+  - [ ] `bevy` 0.13 → 0.14
+  - [ ] `bevy_rapier3d` 0.26 → 0.27
+  - [ ] `bevy_egui` 0.25 → 0.28（如使用）
+  
+- [ ] **API 迁移**
+  - [ ] Color API：`Color::rgb()` → `Color::srgb()` / `Srgba`
+  - [ ] App::world 访问：`app.world` → `app.world()` / `app.world_mut()`
+  - [ ] States 模块：添加 `bevy_state` feature
+  - [ ] AssetLoader async trait 适配
+  - [ ] 其他 0.14 破坏性变更
+
+**风险控制**：
+- 在 `upgrade-bevy-0.14` 分支进行，保留 `main` 可运行状态
+- 分阶段提交，每阶段编译验证
+- 升级完成后运行完整测试套件
+
+#### 2.5.3 资源管理
 - [ ] **资源加载系统**
   - [ ] 异步资源加载（Bevy AssetServer封装）
   - [ ] 资源热更新（Mod资源动态加载）
@@ -230,7 +256,7 @@
   - [ ] 资产版本管理
   - [ ] 资产打包工具
 
-#### 2.5.3 测试基础设施
+#### 2.5.4 测试基础设施
 - [x] **单元测试框架**
   - [x] Rust单元测试（cargo test）
   - [~] Lua单元测试（busted框架）⚠️ Windows上需手动运行 `cd game && busted --pattern=test tests/`
@@ -241,7 +267,7 @@
   - [x] 内存使用监控（调试面板）
   - [ ] 加载时间基准
 
-#### 2.5.4 CI/CD增强
+#### 2.5.5 CI/CD增强
 - [ ] **GitHub Actions优化**
   - [x] 三平台构建（Linux/Windows/macOS）
   - [x] 依赖缓存（Cargo registry/target）
@@ -252,7 +278,7 @@
   - [ ] luacheck零警告强制检查
   - [ ] 代码覆盖率报告
 
-#### 2.5.5 文档与规范
+#### 2.5.6 文档与规范
 - [x] **API文档**
   - [ ] Rust API文档（rustdoc）
   - [ ] Lua API文档（ldoc）
@@ -263,7 +289,7 @@
   - [x] 提交信息规范（CONTRIBUTING.md）
   - [x] PR模板（.github/PULL_REQUEST_TEMPLATE.md）
 
-**里程碑**：✅ 已完成！开发效率提升50%，调试时间减少，代码质量可控
+**里程碑**：✅ 2.5.1 已完成！开发效率提升50%，调试时间减少，代码质量可控
 
 **基础设施完成清单**：
 | 项目 | 优先级 | 状态 | 说明 |
@@ -278,6 +304,7 @@
 | 开发日志 | 🟡 中 | ✅ 完成 | docs/daily/目录结构 |
 | PR模板 | 🟡 中 | ✅ 完成 | .github/PULL_REQUEST_TEMPLATE.md |
 | 贡献指南 | 🟡 中 | ✅ 完成 | CONTRIBUTING.md |
+| **Bevy 0.14 升级** | 🟡 中 | 🔄 进行中 | 预防性技术债务清理 |
 
 **剩余缺口**（Phase 3+再考虑）：
 | 项目 | 优先级 | 说明 |
