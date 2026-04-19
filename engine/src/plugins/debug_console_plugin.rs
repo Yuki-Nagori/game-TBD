@@ -245,6 +245,7 @@ fn execute_command(
     lua: &crate::lua_api::LuaRuntime,
     app_exit: &mut EventWriter<AppExit>,
 ) {
+    use bevy::app::AppExit;
     console.add_log(LogLevel::Info, format!("> {}", command));
 
     let parts: Vec<&str> = command.split_whitespace().collect();
@@ -301,7 +302,7 @@ fn execute_command(
         }
         "quit" | "exit" => {
             console.add_log(LogLevel::Info, "正在退出...".to_string());
-            app_exit.send(AppExit);
+            app_exit.send(AppExit::Success);
         }
         _ => {
             console.add_log(LogLevel::Warn, format!("未知命令: {}", parts[0]));

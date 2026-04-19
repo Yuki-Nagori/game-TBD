@@ -41,7 +41,7 @@ pub struct ColorRgb {
 
 impl From<ColorRgb> for Color {
     fn from(c: ColorRgb) -> Self {
-        Color::rgb(c.r, c.g, c.b)
+        Color::srgb(c.r, c.g, c.b)
     }
 }
 
@@ -212,7 +212,8 @@ fn spawn_scene(
     // 地面（带碰撞）：向下偏移使碰撞体顶面与视觉平面对齐
     let ground_size = current_scene.config.ground_size;
     let ground_color: Color = scene_colors.colors.ground.clone().into();
-    let ground_mesh = meshes.add(Plane3d::default().mesh().size(ground_size, ground_size));
+    // Bevy 0.14: Plane3d::new 需要法线参数
+    let ground_mesh = meshes.add(Plane3d::new(Vec3::Y, Vec2::splat(ground_size)));
     commands.spawn((
         PbrBundle {
             mesh: ground_mesh,
