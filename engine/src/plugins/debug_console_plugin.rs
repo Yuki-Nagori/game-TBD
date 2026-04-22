@@ -526,9 +526,7 @@ fn draw_scene_editor(
                     commands.entity(entity).despawn_recursive();
                 }
                 if ui.button("清空").clicked() {
-                    for entity in editor.history.drain(..) {
-                        commands.entity(entity).despawn_recursive();
-                    }
+                    editor.history.clear();
                     for entity in &editor_placed {
                         commands.entity(entity).despawn_recursive();
                     }

@@ -264,7 +264,10 @@ fn handle_hot_reload(
                 }
             }
             HotReloadEvent::AssetChanged(path) => {
-                let path_str = path.to_string_lossy().to_string();
+                let relative = path
+                    .strip_prefix(std::env::current_dir().unwrap().join("assets"))
+                    .unwrap_or(path);
+                let path_str = relative.to_string_lossy().to_string();
                 info!("重载资源: {}", path.display());
                 asset_manager.reload(&path_str, &asset_server);
                 info!("✓ 资源已重新加载: {}", path.display());

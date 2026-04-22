@@ -210,6 +210,8 @@ impl AssetManager {
             .collect();
         for key in keys_to_remove {
             self.cache.pop(&key);
+            self.states.remove(&key);
+            self.handles.remove(&key);
         }
     }
 
@@ -324,8 +326,9 @@ impl AssetManifest {
                 return Err(ValidationError::DuplicatePath(entry.path.clone()));
             }
 
-            // 文件存在性检查
-            if !std::path::Path::new(&entry.path).exists() {
+            // 文件存在性检查（路径相对于 assets/ 目录）
+            let asset_path = std::path::Path::new("assets").join(&entry.path);
+            if !asset_path.exists() {
                 return Err(ValidationError::FileNotFound(entry.path.clone()));
             }
         }

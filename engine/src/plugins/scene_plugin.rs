@@ -241,7 +241,7 @@ fn spawn_scene(
     let ground_size = current_scene.config.ground_size;
     let ground_color: Color = scene_colors.colors.ground.clone().into();
     // Bevy 0.14: Plane3d::new 需要法线参数
-    let ground_mesh = meshes.add(Plane3d::new(Vec3::Y, Vec2::splat(ground_size)));
+    let ground_mesh = meshes.add(Plane3d::new(Vec3::Y, Vec2::splat(ground_size / 2.0)));
     commands.spawn((
         PbrBundle {
             mesh: ground_mesh,
