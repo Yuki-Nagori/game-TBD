@@ -6,6 +6,7 @@ use bevy::prelude::*;
 use lru::LruCache;
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 /// 资源加载状态
@@ -46,13 +47,10 @@ pub struct CachedAsset {
 }
 
 /// 资源加载计数器，用于生成唯一跟踪 ID
-static mut LOAD_COUNTER: u64 = 0;
+static LOAD_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn next_id() -> u64 {
-    unsafe {
-        LOAD_COUNTER += 1;
-        LOAD_COUNTER
-    }
+    LOAD_COUNTER.fetch_add(1, Ordering::Relaxed)
 }
 
 /// 资源管理器

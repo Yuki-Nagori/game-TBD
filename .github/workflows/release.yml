@@ -16,6 +16,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: stable
+      - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev
       - uses: xmake-io/github-action-setup-xmake@v1
       - run: |
@@ -33,6 +34,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: stable
+      - uses: Swatinem/rust-cache@v2
       - uses: xmake-io/github-action-setup-xmake@v1
       - run: |
           xmake f -m release
@@ -49,6 +51,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: stable
+      - uses: Swatinem/rust-cache@v2
       - uses: xmake-io/github-action-setup-xmake@v1
       - run: |
           xmake f -m release

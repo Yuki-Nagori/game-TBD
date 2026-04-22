@@ -164,6 +164,7 @@ fn toggle_console(
 fn draw_console(
     mut contexts: EguiContexts,
     mut console: ResMut<DebugConsoleState>,
+    mut editor: ResMut<SceneEditorState>,
     lua: Res<crate::lua_api::LuaRuntime>,
     mut app_exit: EventWriter<AppExit>,
 ) {
@@ -250,7 +251,7 @@ fn draw_console(
             if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                 let command = console.input_buffer.clone();
                 if !command.is_empty() {
-                    execute_command(&command, &mut console, &lua, &mut app_exit);
+                    execute_command(&command, &mut console, &mut editor, &lua, &mut app_exit);
                     console.history.push(command);
                     console.input_buffer.clear();
                 }
@@ -272,6 +273,7 @@ enum LuaResult {
 fn execute_command(
     command: &str,
     console: &mut DebugConsoleState,
+    editor: &mut SceneEditorState,
     lua: &crate::lua_api::LuaRuntime,
     app_exit: &mut EventWriter<AppExit>,
 ) {
@@ -337,6 +339,7 @@ fn execute_command(
             console.add_log(LogLevel::Info, "实体查看器已打开".to_string());
         }
         "editor" => {
+            editor.enabled = true;
             console.add_log(
                 LogLevel::Info,
                 "场景编辑器已打开（在性能面板下方）".to_string(),
