@@ -161,59 +161,78 @@ xmake pack-assets          # 基于 manifest.toml 打包资产包
 
 ```
 ~/game-TBD/
-├── engine/              # Rust 核心引擎
+├── engine/                  # Rust 核心引擎
+│   ├── Cargo.toml
 │   ├── src/
-│   │   ├── main.rs      # 入口
-│   │   ├── lib.rs       # 库入口
-│   │   ├── lua_api/     # Lua 绑定
-│   │   │   ├── mod.rs   # LuaCommand 定义
-│   │   │   └── runtime.rs  # LuaRuntime (Actor 模式)
-│   │   ├── plugins/     # Bevy 插件系统
-│   │   │   ├── mod.rs       # 插件汇总 (GamePlugin)
+│   │   ├── main.rs          # 主入口（精简，仅插件注册）
+│   │   ├── lib.rs           # 库入口 + rustdoc
+│   │   ├── asset_manager.rs # 资源管理器（加载/缓存/清单验证）
+│   │   ├── plugins/         # Bevy 插件系统
+│   │   │   ├── mod.rs           # 插件汇总 (GamePlugin)
 │   │   │   ├── player_plugin.rs    # 玩家：输入、移动、动画
 │   │   │   ├── camera_plugin.rs    # 相机：跟随、鼠标控制
 │   │   │   ├── scene_plugin.rs     # 场景：初始化、方块建筑
 │   │   │   ├── lua_command_plugin.rs  # Lua 命令处理
 │   │   │   ├── hot_reload_plugin.rs   # 热重载
-│   │   │   └── debug_console_plugin.rs  # 调试控制台
-│   │   ├── asset_manager.rs  # 资源管理器（加载/缓存/清单）
-│   │   ├── components/  # ECS 组件定义
-│   │   ├── resources/   # 全局资源
-│   │   ├── core/        # 核心系统（时间、功法）
-│   │   ├── constants.rs # 游戏常量
-│   │   └── utils.rs     # 工具函数
-│   ├── tests/           # 集成测试
+│   │   │   └── debug_console_plugin.rs # 调试控制台
+│   │   ├── components/      # ECS 组件定义
+│   │   ├── resources/       # 全局资源
+│   │   ├── core/            # 游戏核心逻辑（时间、功法）
+│   │   ├── lua_api/         # Lua 运行时与 API
+│   │   ├── constants.rs     # 游戏常量（速度、距离、颜色）
+│   │   └── utils.rs         # 工具函数
+│   ├── tests/               # 集成测试
 │   │   ├── lua_api_test.rs
 │   │   ├── integration_test.rs
 │   │   ├── asset_manifest_test.rs
-│   │   └── fixtures/    # 测试夹具
-│   ├── benches/         # 基准测试
-│   │   └── loading_bench.rs
-│   └── Cargo.toml
-├── game/                # Lua 游戏逻辑
-│   ├── main.lua         # 入口
-│   ├── config/          # 配置文件
-│   │   ├── game.lua     # 全局配置
-│   │   ├── player.lua   # 玩家配置
-│   │   ├── camera.lua   # 相机配置
-│   │   ├── colors.lua   # 场景颜色
-│   │   └── scenes.lua   # 场景配置
-│   └── tests/           # Lua 测试 (busted)
-├── assets/              # 游戏资源
-├── docs/                # 文档
-│   ├── asset-pipeline.md  # 资产管线规范
-│   └── build-optimization.md
-├── .github/
-│   └── workflows/       # CI/CD
+│   │   └── fixtures/        # 测试夹具
+│   └── benches/             # 基准测试
+│       └── loading_bench.rs
+│
+├── game/                    # Lua 游戏逻辑（剧本）
+│   ├── main.lua             # 入口脚本
+│   ├── config/              # 配置文件
+│   │   ├── game.lua
+│   │   ├── player.lua
+│   │   ├── camera.lua
+│   │   ├── colors.lua
+│   │   └── scenes.lua
+│   └── tests/               # Lua 测试 (busted)
+│
+├── assets/                  # 游戏资源（模型、贴图、音效）
+│
+├── docs/                    # 文档
+│   ├── asset-pipeline.md    # 资产管线规范
+│   ├── build-optimization.md # 构建优化指南
+│   ├── debug-console.md     # 调试控制台使用指南
+│   ├── engine-design.md     # 引擎架构设计
+│   ├── lua-api.md           # Lua API 接口规范
+│   ├── mod-system.md        # Mod 系统设计与创作指南
+│   ├── MOD_API.md           # Mod API 架构文档
+│   └── template-system.md   # Mod 模板工具使用
+│
+├── .github/                 # CI/CD 配置
+│   └── workflows/
 │       ├── build-linux.yml
 │       ├── build-macos.yml
 │       ├── build-windows.yml
 │       ├── coverage.yml
 │       └── release.yml
-├── xmake.lua            # 构建配置
-├── config.ld            # ldoc 配置
-├── .luacheckrc          # Lua 检查配置
-└── PLAN.md              # 开发计划
+│
+├── tools/                   # 开发工具（Mod 创建、打包、验证）
+│
+├── PLAN.md                  # 游戏设计与开发计划
+├── README.md                # 项目简介
+├── xmake.lua                # 构建配置
+├── config.ld                # ldoc 配置
+├── COPYING                  # 许可证说明
+├── LICENSE-APACHE           # Apache 许可证
+├── LICENSE-MIT              # MIT 许可证
+├── .gitignore
+├── .gitattributes
+├── .luacheckrc              # Lua 代码检查配置
+├── stylua.toml              # Lua 格式化配置
+└── rustfmt.toml             # Rust 格式化配置
 ```
 
 ## 当前功能

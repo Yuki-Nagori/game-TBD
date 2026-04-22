@@ -3,8 +3,7 @@ use ming_rpg::lua_api::LuaRuntime;
 use std::path::PathBuf;
 
 fn script_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../game/main.lua")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../game/main.lua")
 }
 
 fn bench_lua_runtime_creation(c: &mut Criterion) {
