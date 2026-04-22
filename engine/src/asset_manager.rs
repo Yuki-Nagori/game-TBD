@@ -68,6 +68,8 @@ pub struct AssetManager {
     cache_hits: u64,
     /// 缓存未命中次数
     cache_misses: u64,
+    /// Bevy 资源句柄（用于查询加载状态）
+    handles: HashMap<String, UntypedHandle>,
 }
 
 impl Default for AssetManager {
@@ -86,11 +88,12 @@ impl AssetManager {
             cache: LruCache::new(NonZeroUsize::new(64).unwrap()),
             cache_hits: 0,
             cache_misses: 0,
+            handles: HashMap::new(),
         }
     }
 
     /// 启动资源加载，返回跟踪 ID
-    pub fn load(&mut self, path: &str) -> u64 {
+    pub fn load(&mut self, path: &str, asset_server: &AssetServer) -> u64 {
         // 优先检查缓存命中（peek 不更新访问顺序）
         if let Some(cached) = self.cache.peek(path) {
             self.cache_hits += 1;
@@ -98,6 +101,8 @@ impl AssetManager {
         }
 
         let id = next_id();
+        let handle: UntypedHandle = asset_server.load_untyped(path.to_string()).into();
+        self.handles.insert(path.to_string(), handle);
         self.states.insert(
             path.to_string(),
             AssetLoadState::Loading {
@@ -123,12 +128,13 @@ impl AssetManager {
                 continue;
             };
 
-            // 尝试获取加载状态
-            let load_state = asset_server
-                .get_handle_untyped(&path)
-                .and_then(|h| asset_server.get_load_state(&h));
+            // 使用加载时存储的句柄查询加载状态
+            let Some(handle) = self.handles.get(&path) else {
+                continue;
+            };
+            let load_state = asset_server.load_state(handle.id());
             match load_state {
-                Some(bevy::asset::LoadState::Loaded) => {
+                bevy::asset::LoadState::Loaded => {
                     self.states.insert(
                         path.clone(),
                         AssetLoadState::Ready { path: path.clone(), handle_id },
@@ -145,7 +151,7 @@ impl AssetManager {
                         },
                     );
                 }
-                Some(bevy::asset::LoadState::Failed(_)) => {
+                bevy::asset::LoadState::Failed(_) => {
                     self.states.insert(
                         path.clone(),
                         AssetLoadState::Failed {
@@ -190,6 +196,7 @@ impl AssetManager {
     pub fn invalidate(&mut self, path: &str) {
         self.cache.pop(path);
         self.states.remove(path);
+        self.handles.remove(path);
     }
 
     /// 清理超期未使用的缓存条目
@@ -212,9 +219,9 @@ impl AssetManager {
     }
 
     /// 重新加载资源（失效缓存 + 重新发起加载）
-    pub fn reload(&mut self, path: &str) -> u64 {
+    pub fn reload(&mut self, path: &str, asset_server: &AssetServer) -> u64 {
         self.invalidate(path);
-        self.load(path)
+        self.load(path, asset_server)
     }
 }
 

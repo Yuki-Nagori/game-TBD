@@ -229,6 +229,7 @@ fn handle_hot_reload(
     mut events: EventReader<HotReloadEvent>,
     lua: Res<LuaRuntime>,
     mut asset_manager: ResMut<crate::asset_manager::AssetManager>,
+    asset_server: Res<AssetServer>,
     _entity_registry: ResMut<EntityRegistry>,
 ) {
     for event in events.read() {
@@ -265,8 +266,8 @@ fn handle_hot_reload(
             HotReloadEvent::AssetChanged(path) => {
                 let path_str = path.to_string_lossy().to_string();
                 info!("重载资源: {}", path.display());
-                asset_manager.reload(&path_str);
-                info!("✓ 资源缓存已失效并重新加载: {}", path.display());
+                asset_manager.reload(&path_str, &asset_server);
+                info!("✓ 资源已重新加载: {}", path.display());
             }
             HotReloadEvent::ManualReload => {
                 info!("执行手动重载...");

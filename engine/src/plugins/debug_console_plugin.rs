@@ -626,18 +626,14 @@ static LOG_RECEIVER: OnceLock<std::sync::Mutex<std::sync::mpsc::Receiver<LogEntr
     OnceLock::new();
 
 impl ConsoleLogLayer {
-    /// 创建新的日志层
+    /// 创建新的日志层（单例，只能调用一次）
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         let (tx, rx) = std::sync::mpsc::channel();
-        // 存储 receiver 到全局静态变量
-        let _ = LOG_RECEIVER.set(std::sync::Mutex::new(rx));
+        if LOG_RECEIVER.set(std::sync::Mutex::new(rx)).is_err() {
+            panic!("ConsoleLogLayer::new() called more than once; it is a singleton");
+        }
         Self { sender: tx }
-    }
-}
-
-impl Default for ConsoleLogLayer {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
