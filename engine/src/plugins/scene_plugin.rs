@@ -412,7 +412,7 @@ pub fn spawn_scene_object(
     position: Vec3,
 ) -> Option<Entity> {
     let wall_color: Color = colors.wall.clone().into();
-    let roof_color: Color = colors.roof.clone().into();
+    let _roof_color: Color = colors.roof.clone().into();
     let tree_color: Color = colors.tree.clone().into();
 
     let entity = match obj_type {
@@ -452,7 +452,7 @@ pub fn spawn_scene_object(
                 .spawn((
                     PbrBundle {
                         mesh,
-                        material: materials.add(roof_color),
+                        material: materials.add(wall_color),
                         transform: Transform::from_translation(position),
                         ..default()
                     },
