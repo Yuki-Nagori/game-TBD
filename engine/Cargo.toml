@@ -48,6 +48,7 @@ rand = "0.9"            # 随机数
 hashbrown = "0.14"      # 高性能 HashMap
 uuid = { version = "1.7", features = ["v4"] }   # 实体ID生成
 bincode = "1.3"         # 二进制序列化（Lua Actor 通信）
+lru = "0.12"            # LRU 缓存（资源管理）
 
 # 开发模式依赖
 notify = { version = "6.1", optional = true }       # 文件监听（热重载）
@@ -68,6 +69,8 @@ dev-tools = ["hot-reload"]               # 完整开发工具集
 
 [dev-dependencies]
 pretty_assertions = "1.4"    # 测试输出美化
+criterion = { version = "0.5", features = ["html_reports"] }  # 基准测试
+tempfile = "3.10"            # 临时文件（测试用）
 
 # =============================================================================
 # 编译配置：开发模式（最快的编译速度）
@@ -112,3 +115,7 @@ strip = false           # 保留符号表，用于调试
 inherits = "release"
 opt-level = "z"         # 体积优先
 lto = "fat"             # 全链接时优化
+
+[[bench]]
+name = "loading_bench"
+harness = false

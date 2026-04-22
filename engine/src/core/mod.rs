@@ -4,14 +4,18 @@
 
 use bevy::prelude::*;
 
-// 时间系统（游戏内日期）
+/// 游戏内时间资源
 #[derive(Resource, Debug)]
 #[allow(dead_code)]
 pub struct GameTime {
+    /// 当前年份
     pub year: i32,
+    /// 当前月份（1-12）
     pub month: u8,
+    /// 当前日期（1-30）
     pub day: u8,
-    pub hour: f32, // 0.0 - 24.0
+    /// 当前小时（0.0 - 24.0）
+    pub hour: f32,
 }
 
 impl Default for GameTime {
@@ -59,31 +63,42 @@ impl std::fmt::Display for GameTime {
     }
 }
 
-// 角色基础组件（预留）
+/// 角色基础组件（预留）
 #[derive(Component, Debug)]
 #[allow(dead_code)]
 pub struct Character {
+    /// 角色姓名
     name: String,
+    /// 角色年龄
     age: u8,
 }
 
-// 功法组件（预留）
+/// 功法组件（预留）
 #[derive(Component, Debug)]
 #[allow(dead_code)]
 pub struct Cultivation {
+    /// 当前境界
     pub realm: Realm,
-    pub qi: f32,     // 当前真气
-    pub max_qi: f32, // 真气上限
+    /// 当前真气
+    pub qi: f32,
+    /// 真气上限
+    pub max_qi: f32,
 }
 
+/// 修仙境界枚举
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
 pub enum Realm {
-    Mortal,      // 凡人
-    QiRefining,  // 练气
-    Foundation,  // 筑基
-    GoldenCore,  // 金丹
-    NascentSoul, // 元婴
+    /// 凡人
+    Mortal,
+    /// 练气
+    QiRefining,
+    /// 筑基
+    Foundation,
+    /// 金丹
+    GoldenCore,
+    /// 元婴
+    NascentSoul,
 }
 
 impl Default for Cultivation {

@@ -5,6 +5,9 @@
 //! 2. 错误透明 - 用 Result 传播错误，不 panic
 //! 3. 可测试 - 核心业务逻辑独立可测
 
+#![warn(missing_docs)]
+
+pub mod asset_manager;
 pub mod components;
 pub mod constants;
 pub mod core;

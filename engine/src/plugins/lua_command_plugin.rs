@@ -14,6 +14,7 @@ use crate::lua_api::{LuaCommand, LuaRuntime};
 use crate::resources::{EntityRegistry, ScriptHotReload};
 use crate::utils::get_last_modified;
 
+/// Lua 命令处理插件
 pub struct LuaCommandPlugin;
 
 impl Plugin for LuaCommandPlugin {

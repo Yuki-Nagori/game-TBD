@@ -11,10 +11,11 @@
 
 ## 技术栈
 
-- **引擎**：Rust + Bevy (ECS)
+- **引擎**：Rust + Bevy 0.14 (ECS)
 - **脚本**：Lua 5.4 (游戏逻辑)
 - **构建**：xmake + cargo
 - **美术**：极简 Low Poly（方块占位）
+- **物理**：Rapier3D
 
 ## 快速开始
 
@@ -138,10 +139,15 @@ xmake format       # 代码格式化（rustfmt + stylua）
 xmake format-check # 检查代码格式（不修改文件）
 xmake clean        # 清理构建产物
 
-# 4. 打包发布
+# 4. 基准测试
+cd engine
+cargo bench
+
+# 5. 打包发布
 xmake config -m release     # 切换到 release 模式
 xmake build                # 构建
-xmake pack             # 打包（TODO：实现自动打包）
+xmake pack                 # 打包发布产物
+xmake pack-assets          # 基于 manifest.toml 打包资产包
 ```
 
 **模式说明：**
@@ -154,24 +160,99 @@ xmake pack             # 打包（TODO：实现自动打包）
 ## 项目结构
 
 ```
-~/game/
+~/game-TBD/
 ├── engine/              # Rust 核心引擎
 │   ├── src/
 │   │   ├── main.rs      # 入口
+│   │   ├── lib.rs       # 库入口
 │   │   ├── lua_api/     # Lua 绑定
-│   │   └── core/        # 核心系统
+│   │   │   ├── mod.rs   # LuaCommand 定义
+│   │   │   └── runtime.rs  # LuaRuntime (Actor 模式)
+│   │   ├── plugins/     # Bevy 插件系统
+│   │   │   ├── mod.rs       # 插件汇总 (GamePlugin)
+│   │   │   ├── player_plugin.rs    # 玩家：输入、移动、动画
+│   │   │   ├── camera_plugin.rs    # 相机：跟随、鼠标控制
+│   │   │   ├── scene_plugin.rs     # 场景：初始化、方块建筑
+│   │   │   ├── lua_command_plugin.rs  # Lua 命令处理
+│   │   │   ├── hot_reload_plugin.rs   # 热重载
+│   │   │   └── debug_console_plugin.rs  # 调试控制台
+│   │   ├── asset_manager.rs  # 资源管理器（加载/缓存/清单）
+│   │   ├── components/  # ECS 组件定义
+│   │   ├── resources/   # 全局资源
+│   │   ├── core/        # 核心系统（时间、功法）
+│   │   ├── constants.rs # 游戏常量
+│   │   └── utils.rs     # 工具函数
+│   ├── tests/           # 集成测试
+│   │   ├── lua_api_test.rs
+│   │   ├── integration_test.rs
+│   │   ├── asset_manifest_test.rs
+│   │   └── fixtures/    # 测试夹具
+│   ├── benches/         # 基准测试
+│   │   └── loading_bench.rs
 │   └── Cargo.toml
 ├── game/                # Lua 游戏逻辑
 │   ├── main.lua         # 入口
-│   ├── entities/        # 实体定义
-│   ├── systems/         # 游戏系统
-│   ├── scenes/          # 场景配置
-│   └── story/           # 剧情脚本
+│   ├── config/          # 配置文件
+│   │   ├── game.lua     # 全局配置
+│   │   ├── player.lua   # 玩家配置
+│   │   ├── camera.lua   # 相机配置
+│   │   ├── colors.lua   # 场景颜色
+│   │   └── scenes.lua   # 场景配置
+│   └── tests/           # Lua 测试 (busted)
 ├── assets/              # 游戏资源
 ├── docs/                # 文档
+│   ├── asset-pipeline.md  # 资产管线规范
+│   └── build-optimization.md
+├── .github/
+│   └── workflows/       # CI/CD
+│       ├── build-linux.yml
+│       ├── build-macos.yml
+│       ├── build-windows.yml
+│       ├── coverage.yml
+│       └── release.yml
 ├── xmake.lua            # 构建配置
+├── config.ld            # ldoc 配置
+├── .luacheckrc          # Lua 检查配置
 └── PLAN.md              # 开发计划
 ```
+
+## 当前功能
+
+### 游戏系统
+- [x] 3D 场景初始化（光照、地面、方块建筑）
+- [x] 第三人称角色控制（WASD 移动 + 鼠标控制相机）
+- [x] 人物朝向独立于相机
+- [x] 滚轮缩放相机（5-40 单位）
+- [x] Alt 键切换鼠标锁定/释放
+- [x] Rapier3D 物理碰撞
+- [x] Lua 配置驱动（玩家/相机/场景/颜色）
+- [x] Lua 脚本热重载（F5 或文件变化自动重载）
+
+### 调试工具（`MING_RPG_DEV_MODE=1`）
+- [x] 游戏内调试控制台（`~` 键呼出）
+- [x] 实时 FPS / 帧时间 / 实体数监控
+- [x] 日志筛选（Debug/Info/Warn/Error）
+- [x] Lua 代码即时执行
+- [x] **实体查看器**（`entities` 命令）— 查看所有 ECS 实体与组件
+- [x] **场景编辑器**（`editor` 命令）— 可视化放置 Building/Tree/Wall
+- [x] 性能基准测试面板
+
+### 资源管理
+- [x] 异步资源加载封装（`AssetManager`）
+- [x] LRU 资源缓存（64 条目上限）
+- [x] 资源热更新（纹理/模型文件变化自动重载）
+- [x] 资产清单验证（`AssetManifest`）— 路径/格式/版本检查
+- [x] 资产打包工具（`xmake pack-assets`）
+
+### 测试与质量
+- [x] Rust 单元测试 / 集成测试（`cargo test --features dev-tools`）
+- [x] Lua 单元测试（busted）
+- [x] 加载时间基准测试（criterion）
+- [x] clippy 零警告强制检查
+- [x] luacheck 零警告强制检查
+- [x] rustdoc 完整文档（`RUSTDOCFLAGS="-D warnings"`）
+- [x] Lua API 文档（ldoc）
+- [x] 三平台 CI 构建 + 自动发布 + 代码覆盖率
 
 ## 开发计划
 

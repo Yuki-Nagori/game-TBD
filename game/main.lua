@@ -1,7 +1,7 @@
--- main.lua
--- 游戏主入口脚本
--- 由 Rust 引擎加载执行
--- luacheck: ignore
+--- 游戏主入口脚本
+-- @script main
+-- @description 初始化游戏配置，加载场景和实体定义
+-- luacheck: ignore 131
 
 log_info("Lua 脚本系统启动")
 
@@ -39,14 +39,17 @@ SCENE_CONFIG = scenes_config
 -- 游戏逻辑状态
 local elapsed = 0.0
 
--- 初始化函数
+--- 初始化函数
+-- @function init
 function init()
     log_info("游戏初始化中...")
     log_info("游戏版本: " .. GAME_CONFIG.version)
     log_info("游戏初始化完成")
 end
 
--- 主循环（每帧调用）
+--- 主循环（每帧调用）
+-- @function update
+-- @param dt 帧间隔时间（秒）
 function update(dt)
     elapsed = elapsed + dt
     -- 游戏逻辑更新（留空供后续开发）

@@ -13,12 +13,16 @@ use crate::resources::EntityRegistry;
 /// 玩家配置（从 Lua 读取）
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct PlayerConfig {
+    /// 模型场景路径
     #[serde(rename = "model_scene")]
     pub model_scene: String,
+    /// 模型缩放
     #[serde(rename = "scale")]
     pub scale: f32,
+    /// 基础高度
     #[serde(rename = "base_height")]
     pub base_height: f32,
+    /// 偏航角偏移
     #[serde(rename = "yaw_offset")]
     pub yaw_offset: f32,
 }
@@ -37,8 +41,10 @@ impl Default for PlayerConfig {
 /// 玩家移动配置（从 Lua 读取）
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct PlayerMovementConfig {
+    /// 移动速度
     #[serde(rename = "speed")]
     pub speed: f32,
+    /// 旋转速度
     #[serde(rename = "rotation_speed")]
     pub rotation_speed: f32,
 }
@@ -56,10 +62,13 @@ impl Default for PlayerMovementConfig {
 #[derive(Debug, Clone, serde::Deserialize)]
 #[allow(dead_code)]
 pub struct WalkAnimationConfig {
+    /// 行走振幅
     #[serde(rename = "bob_amplitude")]
     pub bob_amplitude: f32,
+    /// 行走速度
     #[serde(rename = "bob_speed")]
     pub bob_speed: f32,
+    /// 恢复速度
     #[serde(rename = "recover_speed")]
     pub recover_speed: f32,
 }
@@ -77,11 +86,15 @@ impl Default for WalkAnimationConfig {
 /// 运行时配置资源
 #[derive(Default, Resource)]
 pub struct PlayerRuntimeConfig {
+    /// 玩家配置
     pub player: PlayerConfig,
+    /// 移动配置
     pub movement: PlayerMovementConfig,
+    /// 动画配置
     pub animation: WalkAnimationConfig,
 }
 
+/// 玩家插件
 pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
@@ -156,10 +169,6 @@ fn spawn_player_with_fallback(
     // 尝试加载模型资源
     let scene_handle: Handle<Scene> = asset_server.load(&config.model_scene);
 
-    // 检查资源是否存在（通过尝试获取加载状态）
-    // 注意：Bevy 的资源加载是异步的，我们在这里创建实体并附加场景
-    // 如果加载失败，Bevy 会在控制台输出警告，但游戏会继续运行
-
     // 计算出生高度：确保胶囊体底部略高于地面，避免卡住
     // 胶囊体半高为 PLAYER_COLLIDER_HEIGHT，半径为 PLAYER_COLLIDER_RADIUS
     // 底部在 y - (PLAYER_COLLIDER_HEIGHT + PLAYER_COLLIDER_RADIUS)，需要保证 > 0
@@ -203,8 +212,11 @@ fn spawn_player_with_fallback(
 /// 用于优化性能，避免每帧重复计算
 #[derive(Resource, Default)]
 pub struct CachedCameraDirection {
+    /// 相机前方向量
     pub forward: Vec3,
+    /// 相机右方向量
     pub right: Vec3,
+    /// 缓存是否有效
     pub is_valid: bool,
 }
 

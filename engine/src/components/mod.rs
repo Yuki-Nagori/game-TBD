@@ -15,6 +15,7 @@ pub struct ThirdPersonCamera;
 /// 角色运动状态组件
 #[derive(Component, Default)]
 pub struct CharacterMotion {
+    /// 是否正在移动
     pub is_moving: bool,
     /// 人物独立的朝向（弧度，不受相机影响）
     pub facing_yaw: f32,
@@ -24,12 +25,19 @@ pub struct CharacterMotion {
 #[derive(Component)]
 #[allow(dead_code)]
 pub struct PlaceholderWalkAnimation {
+    /// 基础高度
     pub base_height: f32,
+    /// 动画相位
     pub phase: f32,
 }
 
 impl PlaceholderWalkAnimation {
+    /// 创建新的行走动画占位组件
     pub fn new(base_height: f32) -> Self {
         Self { base_height, phase: 0.0 }
     }
 }
+
+/// 编辑器放置的物体标记组件
+#[derive(Component)]
+pub struct EditorPlaced;

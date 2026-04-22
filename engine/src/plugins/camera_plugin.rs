@@ -22,8 +22,10 @@ use crate::resources::CameraState;
 /// 相机配置（从 Lua 读取）
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct CameraConfig {
+    /// 默认距离
     #[serde(rename = "distance")]
     pub distance: f32,
+    /// 平滑因子
     #[serde(rename = "smooth_factor")]
     pub smooth_factor: f32,
 }
@@ -37,6 +39,7 @@ impl Default for CameraConfig {
     }
 }
 
+/// 相机插件
 pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
