@@ -1,6 +1,6 @@
 //! 资产清单测试
 
-use ming_rpg::asset_manager::{AssetEntry, AssetManifest, ValidationError};
+use ming_rpg::asset_manager::{AssetEntry, AssetManager, AssetManifest, ValidationError};
 use std::io::Write;
 
 fn create_temp_manifest(content: &str) -> tempfile::NamedTempFile {
@@ -130,4 +130,52 @@ type = "model"
     let manifest: AssetManifest = toml::from_str(toml).unwrap();
     assert_eq!(manifest.name, "my-mod");
     assert_eq!(manifest.assets.len(), 2);
+}
+
+#[test]
+fn test_load_manifest_from_file() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let texture_path = temp_dir.path().join("assets/textures/test.png");
+    std::fs::create_dir_all(texture_path.parent().unwrap()).unwrap();
+    std::fs::File::create(&texture_path).unwrap();
+
+    let toml = format!(
+        r#"
+name = "file-mod"
+version = "2.0.0"
+
+[[assets]]
+path = "{}"
+type = "texture"
+"#,
+        texture_path.to_string_lossy()
+    );
+    let temp_file = create_temp_manifest(&toml);
+
+    let mut manager = AssetManager::new();
+    let result = manager.load_manifest(temp_file.path());
+
+    assert!(
+        result.is_ok(),
+        "load_manifest should succeed for valid toml: {:?}",
+        result.err()
+    );
+    let manifest = result.unwrap();
+    assert_eq!(manifest.name, "file-mod");
+    assert_eq!(manifest.version, "2.0.0");
+    assert_eq!(manifest.assets.len(), 1);
+}
+
+#[test]
+fn test_load_manifest_invalid_toml() {
+    let bad_content = "not_valid_toml {{{";
+    let temp_file = create_temp_manifest(bad_content);
+
+    let mut manager = AssetManager::new();
+    let result = manager.load_manifest(temp_file.path());
+
+    assert!(
+        result.is_err(),
+        "load_manifest should fail for invalid toml"
+    );
 }
