@@ -25,23 +25,36 @@ pub struct DebugConsoleState {
     pub auto_scroll: bool,
     /// 筛选级别
     pub filter_level: LogLevel,
+    /// 是否显示实体查看器
+    pub show_entity_viewer: bool,
+    /// 实体查看器筛选文本
+    pub entity_filter: String,
+    /// 选中的实体（用于展开详情）
+    pub selected_entity: Option<Entity>,
 }
 
 /// 日志条目
 #[derive(Clone, Debug)]
 pub struct LogEntry {
+    /// 日志级别
     pub level: LogLevel,
+    /// 日志消息
     pub message: String,
+    /// 时间戳
     pub timestamp: f64,
 }
 
 /// 日志级别
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum LogLevel {
+    /// 调试
     #[default]
     Debug,
+    /// 信息
     Info,
+    /// 警告
     Warn,
+    /// 错误
     Error,
 }
 
@@ -61,13 +74,13 @@ impl std::fmt::Display for LogLevel {
 pub struct PerformanceMonitor {
     /// 是否显示性能面板
     pub visible: bool,
-    /// FPS历史
+    /// FPS 历史
     pub fps_history: VecDeque<f32>,
     /// 最大历史长度
     pub max_history: usize,
-    /// 当前FPS
+    /// 当前 FPS
     pub current_fps: f32,
-    /// 平均FPS
+    /// 平均 FPS
     pub avg_fps: f32,
     /// 帧时间（毫秒）
     pub frame_time_ms: f32,
@@ -75,6 +88,20 @@ pub struct PerformanceMonitor {
     pub entity_count: usize,
 }
 
+/// 场景编辑器状态
+#[derive(Resource, Default)]
+pub struct SceneEditorState {
+    /// 是否启用编辑器
+    pub enabled: bool,
+    /// 选中的预设类型
+    pub selected_prefab: String,
+    /// 放置位置
+    pub placement_position: Vec3,
+    /// 放置历史（用于撤销）
+    pub history: Vec<Entity>,
+}
+
+/// 调试控制台插件
 pub struct DebugConsolePlugin;
 
 impl Plugin for DebugConsolePlugin {
@@ -94,12 +121,15 @@ impl Plugin for DebugConsolePlugin {
         }
         app.init_resource::<DebugConsoleState>()
             .init_resource::<PerformanceMonitor>()
+            .init_resource::<SceneEditorState>()
             .add_systems(Startup, setup_console)
             .add_systems(
                 Update,
                 (
                     toggle_console,
                     draw_console,
+                    draw_entity_viewer,
+                    draw_scene_editor,
                     draw_performance_monitor,
                     update_performance_data,
                     receive_logs,
@@ -134,6 +164,7 @@ fn toggle_console(
 fn draw_console(
     mut contexts: EguiContexts,
     mut console: ResMut<DebugConsoleState>,
+    mut editor: ResMut<SceneEditorState>,
     lua: Res<crate::lua_api::LuaRuntime>,
     mut app_exit: EventWriter<AppExit>,
 ) {
@@ -220,7 +251,7 @@ fn draw_console(
             if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                 let command = console.input_buffer.clone();
                 if !command.is_empty() {
-                    execute_command(&command, &mut console, &lua, &mut app_exit);
+                    execute_command(&command, &mut console, &mut editor, &lua, &mut app_exit);
                     console.history.push(command);
                     console.input_buffer.clear();
                 }
@@ -242,9 +273,11 @@ enum LuaResult {
 fn execute_command(
     command: &str,
     console: &mut DebugConsoleState,
+    editor: &mut SceneEditorState,
     lua: &crate::lua_api::LuaRuntime,
     app_exit: &mut EventWriter<AppExit>,
 ) {
+    use bevy::app::AppExit;
     console.add_log(LogLevel::Info, format!("> {}", command));
 
     let parts: Vec<&str> = command.split_whitespace().collect();
@@ -260,6 +293,8 @@ fn execute_command(
             console.add_log(LogLevel::Info, "  lua <code> - 执行Lua代码".to_string());
             console.add_log(LogLevel::Info, "  reload - 重载Lua脚本".to_string());
             console.add_log(LogLevel::Info, "  fps - 显示FPS".to_string());
+            console.add_log(LogLevel::Info, "  entities - 打开实体查看器".to_string());
+            console.add_log(LogLevel::Info, "  editor - 打开场景编辑器".to_string());
             console.add_log(LogLevel::Info, "  quit - 退出游戏".to_string());
         }
         "clear" => {
@@ -299,14 +334,205 @@ fn execute_command(
             // FPS显示在性能监控面板
             console.add_log(LogLevel::Info, "查看右上角性能面板".to_string());
         }
+        "entities" => {
+            console.show_entity_viewer = true;
+            console.add_log(LogLevel::Info, "实体查看器已打开".to_string());
+        }
+        "editor" => {
+            editor.enabled = true;
+            console.add_log(
+                LogLevel::Info,
+                "场景编辑器已打开（在性能面板下方）".to_string(),
+            );
+        }
         "quit" | "exit" => {
             console.add_log(LogLevel::Info, "正在退出...".to_string());
-            app_exit.send(AppExit);
+            app_exit.send(AppExit::Success);
         }
         _ => {
             console.add_log(LogLevel::Warn, format!("未知命令: {}", parts[0]));
         }
     }
+}
+
+/// 绘制实体查看器面板
+#[allow(clippy::too_many_arguments)]
+fn draw_entity_viewer(
+    mut contexts: EguiContexts,
+    mut console: ResMut<DebugConsoleState>,
+    all_entities: Query<(Entity, Option<&Name>)>,
+    player_query: Query<Entity, With<crate::components::Player>>,
+    camera_query: Query<Entity, With<crate::components::ThirdPersonCamera>>,
+    motion_query: Query<Entity, With<crate::components::CharacterMotion>>,
+    animation_query: Query<Entity, With<crate::components::PlaceholderWalkAnimation>>,
+    transform_query: Query<Entity, With<Transform>>,
+) {
+    if !console.show_entity_viewer {
+        return;
+    }
+
+    let ctx = contexts.ctx_mut();
+
+    egui::Window::new("实体查看器")
+        .default_pos([620.0, 10.0])
+        .default_size([300.0, 400.0])
+        .collapsible(true)
+        .show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.label("筛选:");
+                ui.text_edit_singleline(&mut console.entity_filter);
+                if ui.button("关闭").clicked() {
+                    console.show_entity_viewer = false;
+                }
+            });
+
+            ui.separator();
+            ui.label(format!("实体总数: {}", all_entities.iter().count()));
+            ui.separator();
+
+            let filter = console.entity_filter.to_lowercase();
+            let mut entities: Vec<_> = all_entities.iter().collect();
+            entities.sort_by_key(|(e, _)| e.index());
+
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                for (entity, name) in entities {
+                    let name_str = name.map(|n| n.as_str()).unwrap_or("<未命名>");
+                    let id_str = format!("{}: {}", entity.index(), name_str);
+
+                    if !filter.is_empty() && !id_str.to_lowercase().contains(&filter) {
+                        continue;
+                    }
+
+                    let mut components = Vec::new();
+                    if player_query.get(entity).is_ok() {
+                        components.push("Player");
+                    }
+                    if camera_query.get(entity).is_ok() {
+                        components.push("ThirdPersonCamera");
+                    }
+                    if motion_query.get(entity).is_ok() {
+                        components.push("CharacterMotion");
+                    }
+                    if animation_query.get(entity).is_ok() {
+                        components.push("PlaceholderWalkAnimation");
+                    }
+                    if transform_query.get(entity).is_ok() {
+                        components.push("Transform");
+                    }
+
+                    let is_selected = console.selected_entity == Some(entity);
+                    let response = ui.selectable_label(
+                        is_selected,
+                        format!("{} ({} 个组件)", id_str, components.len()),
+                    );
+
+                    if response.clicked() {
+                        console.selected_entity = Some(entity);
+                    }
+
+                    if is_selected {
+                        ui.indent("details", |ui| {
+                            for comp in &components {
+                                ui.label(format!("  - {}", comp));
+                            }
+                        });
+                    }
+                }
+            });
+        });
+}
+
+/// 绘制场景编辑器面板
+fn draw_scene_editor(
+    mut contexts: EguiContexts,
+    mut editor: ResMut<SceneEditorState>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    scene_colors: Res<crate::plugins::scene_plugin::SceneColorRes>,
+    editor_placed: Query<Entity, With<crate::components::EditorPlaced>>,
+) {
+    if !editor.enabled {
+        return;
+    }
+
+    let ctx = contexts.ctx_mut();
+
+    egui::Window::new("场景编辑器")
+        .default_pos([10.0, 170.0])
+        .default_size([200.0, 280.0])
+        .collapsible(true)
+        .show(ctx, |ui| {
+            ui.label("预设:");
+            ui.horizontal(|ui| {
+                if ui
+                    .selectable_label(editor.selected_prefab == "building", "Building")
+                    .clicked()
+                {
+                    editor.selected_prefab = "building".to_string();
+                }
+                if ui
+                    .selectable_label(editor.selected_prefab == "tree", "Tree")
+                    .clicked()
+                {
+                    editor.selected_prefab = "tree".to_string();
+                }
+                if ui
+                    .selectable_label(editor.selected_prefab == "wall", "Wall")
+                    .clicked()
+                {
+                    editor.selected_prefab = "wall".to_string();
+                }
+            });
+
+            ui.separator();
+            ui.label("位置:");
+            ui.horizontal(|ui| {
+                ui.label("X:");
+                ui.add(egui::Slider::new(
+                    &mut editor.placement_position.x,
+                    -50.0..=50.0,
+                ));
+            });
+            ui.horizontal(|ui| {
+                ui.label("Z:");
+                ui.add(egui::Slider::new(
+                    &mut editor.placement_position.z,
+                    -50.0..=50.0,
+                ));
+            });
+            ui.horizontal(|ui| {
+                ui.label("Y:");
+                ui.add(egui::DragValue::new(&mut editor.placement_position.y));
+            });
+
+            ui.separator();
+            if ui.button("放置").clicked()
+                && let Some(entity) = crate::plugins::scene_plugin::spawn_scene_object(
+                    &mut commands,
+                    &mut meshes,
+                    &mut materials,
+                    &scene_colors.colors,
+                    &editor.selected_prefab,
+                    editor.placement_position,
+                )
+            {
+                editor.history.push(entity);
+            }
+            ui.horizontal(|ui| {
+                if ui.button("撤销").clicked()
+                    && let Some(entity) = editor.history.pop()
+                {
+                    commands.entity(entity).despawn_recursive();
+                }
+                if ui.button("清空").clicked() {
+                    editor.history.clear();
+                    for entity in &editor_placed {
+                        commands.entity(entity).despawn_recursive();
+                    }
+                }
+            });
+        });
 }
 
 /// 绘制性能监控面板
@@ -388,6 +614,7 @@ impl DebugConsoleState {
 
 /// 全局日志接收器（将tracing日志转发到控制台）
 pub struct ConsoleLogLayer {
+    /// 日志发送通道
     sender: std::sync::mpsc::Sender<LogEntry>,
 }
 
@@ -397,10 +624,13 @@ static LOG_RECEIVER: OnceLock<std::sync::Mutex<std::sync::mpsc::Receiver<LogEntr
     OnceLock::new();
 
 impl ConsoleLogLayer {
+    /// 创建新的日志层（单例，只能调用一次）
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         let (tx, rx) = std::sync::mpsc::channel();
-        // 存储 receiver 到全局静态变量
-        let _ = LOG_RECEIVER.set(std::sync::Mutex::new(rx));
+        if LOG_RECEIVER.set(std::sync::Mutex::new(rx)).is_err() {
+            panic!("ConsoleLogLayer::new() called more than once; it is a singleton");
+        }
         Self { sender: tx }
     }
 }
@@ -458,7 +688,7 @@ where
 struct MessageVisitor<'a>(&'a mut String);
 
 impl<'a> tracing::field::Visit for MessageVisitor<'a> {
-    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+    fn record_debug(&mut self, field: &tracing::field::Field, _value: &dyn std::fmt::Debug) {
         if field.name() == "message" {
             // 优先尝试record_str，避免Debug格式化的引号
             // 如果值实现了Display，这里会被调用两次：

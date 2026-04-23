@@ -4,11 +4,11 @@
 
 ## 项目概述
 
-**代号**：TBD（待命名）  
-**类型**：3D 历史玄幻 RPG  
-**时代背景**：明朝（约嘉靖至万历年间）  
-**核心设定**：历史演义 + 修仙功法系统  
-**技术栈**：Rust (Bevy) + Lua + xmake  
+**代号**：TBD（待命名）
+**类型**：3D 历史玄幻 RPG
+**时代背景**：明朝（约嘉靖至万历年间）
+**核心设定**：历史演义 + 修仙功法系统
+**技术栈**：Rust (Bevy 0.14) + Lua + xmake
 **平台**：桌面端 (Windows/Linux/macOS)
 
 ---
@@ -73,63 +73,84 @@
 
 ## 技术架构
 
-**技术栈**：Rust (Bevy) + Lua + xmake
+**技术栈**：Rust (Bevy 0.14) + Lua + xmake
 
 ### 目录结构
 
 ```
-~/game/
-├── .github/
-│   └── workflows/           # CI 配置
-│       ├── build-linux.yml
-│       ├── build-macos.yml
-│       └── build-windows.yml
-│
-├── docs/                    # 文档
-│   ├── engine-design.md     # 引擎技术实现
-│   ├── lua-api.md           # Lua 接口规范
-│   ├── MOD_API.md           # Mod 沙箱接口规范
-│   ├── mod-system.md        # Mod 架构设计
-│   └── template-system.md   # 创作工具（Phase 4 后）
-│
+~/game-TBD/
 ├── engine/                  # Rust 核心引擎
 │   ├── Cargo.toml
 │   ├── src/
 │   │   ├── main.rs          # 主入口（精简，仅插件注册）
+│   │   ├── lib.rs           # 库入口 + rustdoc
+│   │   ├── asset_manager.rs # 资源管理器（加载/缓存/清单验证）
 │   │   ├── plugins/         # Bevy 插件系统
-│   │   │   ├── mod.rs       # 插件汇总
-│   │   │   ├── player_plugin.rs   # 玩家：输入、移动、动画
-│   │   │   ├── camera_plugin.rs   # 相机：跟随、鼠标控制
-│   │   │   └── scene_plugin.rs    # 场景：初始化、Lua 热重载
+│   │   │   ├── mod.rs           # 插件汇总 (GamePlugin)
+│   │   │   ├── player_plugin.rs    # 玩家：输入、移动、动画
+│   │   │   ├── camera_plugin.rs    # 相机：跟随、鼠标控制
+│   │   │   ├── scene_plugin.rs     # 场景：初始化、方块建筑
+│   │   │   ├── lua_command_plugin.rs  # Lua 命令处理
+│   │   │   ├── hot_reload_plugin.rs   # 热重载
+│   │   │   └── debug_console_plugin.rs # 调试控制台
 │   │   ├── components/      # ECS 组件定义
-│   │   │   └── mod.rs       # Player, Camera, CharacterMotion...
 │   │   ├── resources/       # 全局资源
-│   │   │   └── mod.rs       # CameraState, EntityRegistry...
-│   │   ├── constants.rs     # 游戏常量（速度、距离、颜色）
-│   │   ├── utils.rs         # 工具函数
 │   │   ├── core/            # 游戏核心逻辑（时间、功法）
-│   │   └── lua_api/         # Lua 运行时与 API
-│   └── crates/              # Workspace 子 crate（未来拆分）
-│       └── core/
+│   │   ├── lua_api/         # Lua 运行时与 API
+│   │   ├── constants.rs     # 游戏常量（速度、距离、颜色）
+│   │   └── utils.rs         # 工具函数
+│   ├── tests/               # 集成测试
+│   │   ├── lua_api_test.rs
+│   │   ├── integration_test.rs
+│   │   ├── asset_manifest_test.rs
+│   │   └── fixtures/        # 测试夹具
+│   └── benches/             # 基准测试
+│       └── loading_bench.rs
 │
 ├── game/                    # Lua 游戏逻辑（剧本）
-│   └── main.lua             # 入口脚本
+│   ├── main.lua             # 入口脚本
+│   ├── config/              # 配置文件
+│   │   ├── game.lua
+│   │   ├── player.lua
+│   │   ├── camera.lua
+│   │   ├── colors.lua
+│   │   └── scenes.lua
+│   └── tests/               # Lua 测试 (busted)
 │
 ├── assets/                  # 游戏资源（模型、贴图、音效）
 │
-├── tools/                   # 开发工具（后续添加）
+├── docs/                    # 文档
+│   ├── asset-pipeline.md    # 资产管线规范
+│   ├── build-optimization.md # 构建优化指南
+│   ├── debug-console.md     # 调试控制台使用指南
+│   ├── engine-design.md     # 引擎架构设计
+│   ├── lua-api.md           # Lua API 接口规范
+│   ├── mod-system.md        # Mod 系统设计与创作指南
+│   ├── MOD_API.md           # Mod API 架构文档
+│   └── template-system.md   # Mod 模板工具使用
 │
-├── PLAN.md                  # 本文件：游戏设计与开发计划
+├── .github/                 # CI/CD 配置
+│   └── workflows/
+│       ├── build-linux.yml
+│       ├── build-macos.yml
+│       ├── build-windows.yml
+│       ├── coverage.yml
+│       └── release.yml
+│
+├── tools/                   # 开发工具（Mod 创建、打包、验证）
+│
+├── PLAN.md                  # 游戏设计与开发计划
 ├── README.md                # 项目简介
-├── xmake.lua               # 构建配置
-├── COPYING                 # 许可证说明
-├── LICENSE-APACHE          # Apache 许可证
-├── LICENSE-MIT             # MIT 许可证
+├── xmake.lua                # 构建配置
+├── config.ld                # ldoc 配置
+├── COPYING                  # 许可证说明
+├── LICENSE-APACHE           # Apache 许可证
+├── LICENSE-MIT              # MIT 许可证
 ├── .gitignore
 ├── .gitattributes
-├── .luacheckrc             # Lua 代码检查配置
-├── stylua.toml             # Lua 格式化配置
-└── rustfmt.toml            # Rust 格式化配置
+├── .luacheckrc              # Lua 代码检查配置
+├── stylua.toml              # Lua 格式化配置
+└── rustfmt.toml             # Rust 格式化配置
 ```
 
 ### 引擎与剧本分离
@@ -152,17 +173,17 @@
   - [x] xmake 配置 Rust + Lua 混合构建
   - [x] Cargo 工程初始化
   - [x] Lua 5.4 / LuaJIT 集成 (mlua crate)
-  
+
 - [x] Week 2: Bevy 基础
   - [x] 窗口创建与事件循环
   - [x] 2D 渲染测试 (Sprite)
   - [x] 基础输入处理
-  
-- [ ] Week 3: Lua 绑定
+
+- [x] Week 3: Lua 绑定
   - [x] Rust ↔ Lua 双向调用
   - [x] 热重载机制 (开发时自动重载 Lua)
   - [x] 基础 API 暴露 (实体创建、组件操作)
-  
+
 - [x] Week 4: MVP 演示
   - [x] Lua 控制一个方块移动
   - [x] 简单的 ECS 实体创建/销毁
@@ -181,13 +202,13 @@
   - [x] 相机控制 (第三人称跟随)
   - [x] **方块建筑系统**：用立方体搭建场景占位
   - [x] 简单材质区分（红墙、灰瓦、绿地）
-  
+
 - [x] Week 7-8: 角色系统
   - [x] 角色模型加载 (glTF)
   - [x] 基础动画系统
   - [x] 角色移动 (WASD + 鼠标)
   - [x] 人物朝向独立于相机（右键旋转不影响朝向）
-  
+
 - [x] Week 9-10: 场景系统
   - [x] 场景配置文件 (Lua)
   - [x] 配置系统：玩家/相机/动画 Lua 配置化
@@ -199,19 +220,19 @@
 ---
 
 ### Phase 2.5: 基础设施完善 (Week 11)
-**目标**：补充开发工具链和基础设施，为Phase 3做准备
+**目标**：补充开发工具链和基础设施，为 Phase 3 做准备
 
 #### 2.5.1 开发工具链
 - [x] **热重载系统完善**
-  - [x] Lua脚本热重载（文件变化自动重载）
+  - [x] Lua 脚本热重载（文件变化自动重载）
   - [x] 场景热重载（无需重启游戏）
   - [x] 配置热重载（实时调整参数）
-  
+
 - [x] **开发调试工具**
-  - [x] 游戏内调试控制台（~键呼出）
-  - [x] 实时FPS/性能监控
-  - [ ] 实体查看器（ECS组件调试）
-  - [ ] 场景编辑器基础（可视化放置物体）
+  - [x] 游戏内调试控制台（`~` 键呼出）
+  - [x] 实时 FPS / 帧时间 / 实体数监控
+  - [x] 实体查看器（`entities` 命令 — ECS 组件调试）
+  - [x] 场景编辑器基础（`editor` 命令 — 可视化放置 Building/Tree/Wall）
 
 - [x] **日志系统增强**
   - [x] 分级日志（trace/debug/info/warn/error）
@@ -219,99 +240,91 @@
   - [x] 游戏内日志查看器（控制台内）
   - [x] ConsoleLogLayer 集成（tracing 日志转发到游戏内控制台）
 
-#### 2.5.2 资源管理
-- [ ] **资源加载系统**
-  - [ ] 异步资源加载（Bevy AssetServer封装）
-  - [ ] 资源热更新（Mod资源动态加载）
-  - [ ] 资源缓存管理
-  
-- [ ] **资产管线**
-  - [ ] 模型/贴图导入规范
-  - [ ] 资产版本管理
-  - [ ] 资产打包工具
+#### 2.5.2 Bevy 0.14 升级
+**目标**：将引擎从 Bevy 0.13 升级到 0.14
 
-#### 2.5.3 测试基础设施
+- [x] **依赖升级**
+  - [x] `bevy` 0.13 → 0.14
+  - [x] `bevy_rapier3d` 0.26 → 0.27
+  - [x] `bevy_egui` 0.25 → 0.28
+
+- [x] **API 迁移**
+  - [x] Color API：`Color::rgb()` → `Color::srgb()` / `Srgba`
+  - [x] Plane3d::new 新签名
+  - [x] 其他 0.14 破坏性变更
+
+#### 2.5.3 资源管理
+- [x] **资源加载系统**
+  - [x] 异步资源加载封装（`AssetManager`）
+  - [x] 资源缓存管理（LRU，64 条目上限）
+  - [x] 资源热更新（Mod 资源动态加载）
+
+- [x] **资产管线**
+  - [x] 模型/贴图导入规范（`AssetManifest` + `ValidationError`）
+  - [x] 资产版本管理（SemVer 兼容检查）
+  - [x] 资产打包工具（`xmake pack-assets`）
+
+#### 2.5.4 测试基础设施
 - [x] **单元测试框架**
-  - [x] Rust单元测试（cargo test）
-  - [~] Lua单元测试（busted框架）⚠️ Windows上需手动运行 `cd game && busted --pattern=test tests/`
-  - [ ] 集成测试（引擎+Lua交互）
-  
+  - [x] Rust 单元测试（cargo test）
+  - [x] Lua 单元测试（busted 框架）
+  - [x] 集成测试（引擎 + Lua 交互，`integration_test.rs`）
+
 - [x] **性能基准测试**
   - [x] 帧率基准测试（调试面板）
   - [x] 内存使用监控（调试面板）
-  - [ ] 加载时间基准
+  - [x] 加载时间基准（`benches/loading_bench.rs`，criterion）
 
-#### 2.5.4 CI/CD增强
-- [ ] **GitHub Actions优化**
+#### 2.5.5 CI/CD 增强
+- [x] **GitHub Actions 优化**
   - [x] 三平台构建（Linux/Windows/macOS）
   - [x] 依赖缓存（Cargo registry/target）
-  - [ ] 自动发布流程
-  
-- [ ] **代码质量门禁**
-  - [ ] clippy零警告强制检查
-  - [ ] luacheck零警告强制检查
-  - [ ] 代码覆盖率报告
+  - [x] 自动发布流程（`release.yml`，tag 触发）
+  - [x] 代码覆盖率报告（`coverage.yml`，tarpaulin）
 
-#### 2.5.5 文档与规范
-- [x] **API文档**
-  - [ ] Rust API文档（rustdoc）
-  - [ ] Lua API文档（ldoc）
-  - [x] 配置参考手册（docs/build-optimization.md）
-  
+- [x] **代码质量门禁**
+  - [x] clippy 零警告强制检查
+  - [x] luacheck 零警告强制检查
+  - [x] rustdoc 零警告强制生成
+
+#### 2.5.6 文档与规范
+- [x] **API 文档**
+  - [x] Rust API 文档（rustdoc，`#![warn(missing_docs)]`）
+  - [x] Lua API 文档（ldoc，`config.ld`）
+  - [x] 资产管线规范（`docs/asset-pipeline.md`）
+  - [x] 配置参考手册（`docs/build-optimization.md`）
+
 - [x] **开发规范**
   - [x] 代码风格指南（CONTRIBUTING.md）
   - [x] 提交信息规范（CONTRIBUTING.md）
-  - [x] PR模板（.github/PULL_REQUEST_TEMPLATE.md）
+  - [x] PR 模板（.github/PULL_REQUEST_TEMPLATE.md）
 
-**里程碑**：✅ 已完成！开发效率提升50%，调试时间减少，代码质量可控
-
-**基础设施完成清单**：
-| 项目 | 优先级 | 状态 | 说明 |
-|:---|:---|:---|:---|
-| 热重载系统 | 🔴 高 | ✅ 完成 | Lua/配置自动重载，F5手动重载 |
-| 调试控制台 | 🔴 高 | ✅ 完成 | ~键呼出，命令执行，性能监控 |
-| 游戏内日志查看器 | 🔴 高 | ✅ 完成 | tracing 日志转发到控制台面板 |
-| 日志文件输出 | 🟡 中 | ✅ 完成 | 分级日志，自动轮转 |
-| 单元测试框架 | 🟡 中 | ✅ 完成 | Lua测试基础，Rust测试占位 |
-| 性能监控 | 🟢 低 | ✅ 完成 | FPS图表，实体计数，帧时间 |
-| 开发工具脚本 | 🟡 中 | ✅ 完成 | quick-test, dev-mode, clean-all |
-| 开发日志 | 🟡 中 | ✅ 完成 | docs/daily/目录结构 |
-| PR模板 | 🟡 中 | ✅ 完成 | .github/PULL_REQUEST_TEMPLATE.md |
-| 贡献指南 | 🟡 中 | ✅ 完成 | CONTRIBUTING.md |
-
-**剩余缺口**（Phase 3+再考虑）：
-| 项目 | 优先级 | 说明 |
-|:---|:---|:---|
-| 资源热更新 | 🟡 中 | Mod资源动态加载（Mod系统时再做） |
-| 场景编辑器 | 🟢 低 | 可视化放置物体（内容制作工具） |
-| ECS实体查看器 | 🟢 低 | 组件调试（需要时添加） |
-| 性能监控 | 🟢 低 | 优化依据 |
-| 场景编辑器 | 🟢 低 | 内容制作 |
+**里程碑**：调试控制台可用，资源管理完善，CI/CD 完整，测试覆盖核心交互
 
 ---
 
-### Phase 3: RPG 核心系统 (Week 11-20)
+### Phase 3: RPG 核心系统 (Week 12-21)
 **目标**：功法、战斗、对话、任务系统
 
-- [ ] Week 11-13: 功法系统
+- [ ] Week 12-14: 功法系统
   - [ ] 功法数据结构
   - [ ] 修炼/突破机制
   - [ ] 功法效果实现 (属性加成、技能解锁)
-  
-- [ ] Week 14-16: 实时战斗系统
+
+- [ ] Week 15-17: 实时战斗系统
   - [ ] 基础移动：WASD + 鼠标瞄准
   - [ ] 普通攻击：鼠标左键
   - [ ] 技能释放：鼠标右键 + 数字键
   - [ ] 真气消耗：技能使用消耗真气，自动回复
   - [ ] 伤害计算：功法加成 + 境界压制
   - [ ] 受击反馈：击退、硬直、死亡
-  
-- [ ] Week 17-18: 对话系统
+
+- [ ] Week 18-19: 对话系统
   - [ ] 对话框 UI
   - [ ] 分支选项
   - [ ] NPC 对话树 (Lua 配置)
-  
-- [ ] Week 19-20: 任务系统
+
+- [ ] Week 20-21: 任务系统
   - [ ] 任务数据结构
   - [ ] 任务状态追踪
   - [ ] 奖励发放
@@ -320,34 +333,34 @@
 
 ---
 
-### Phase 4: 垂直切片 (Week 21-30)
+### Phase 4: 垂直切片 (Week 22-31)
 **目标**：一个可玩的完整循环（锦衣卫出身 + 北京 + 一条事件链）
 
-- [ ] Week 21-23: 北京场景（方块占位版）
+- [ ] Week 22-24: 北京场景（方块占位版）
   - [ ] 紫禁城、北镇抚司、城郊、码头 4 个区域
   - [ ] **程序化生成街道布局**
   - [ ] 区域间移动系统
   - [ ] 基础 NPC 分布（几何体角色）
   - [ ] 关键地标标识（文字标签）
-  
-- [ ] Week 24-26: 锦衣卫出身内容
+
+- [ ] Week 25-27: 锦衣卫出身内容
   - [ ] 专属开局剧情
   - [ ] 情报系统（收集、分析、上报）
   - [ ] 诏狱系统（审讯、关押）
-  
-- [ ] Week 27-28: 历史事件链
+
+- [ ] Week 28-29: 历史事件链
   - [ ] 选择一条事件（如：张居正改革 / 万历援朝）
   - [ ] 蝴蝶效应变量系统
   - [ ] 多结局分支
-  
-- [ ] Week 29-30: 人生终局
+
+- [ ] Week 30-31: 人生终局
   - [ ] 死亡/飞升判定
   - [ ] 生平回顾系统
   - [ ] 成就/传承
 
 **里程碑**：一个出身、一座城市、一条事件链，30-60 分钟完整体验
 
-### Phase 5: 内容扩展 (Week 31+)
+### Phase 5: 内容扩展 (Week 32+)
 **目标**：逐步添加内容，通过更新/DLC 发布
 
 - [ ] 新出身（江南士子、边军小卒等）
@@ -358,7 +371,7 @@
 
 ---
 
-### Phase 6: 打磨与发布 (Week 41+)
+### Phase 6: 打磨与发布 (Week 42+)
 **目标**：Steam/itch.io 发布准备
 
 - [ ] 性能优化
@@ -435,6 +448,32 @@
 - **模型位置修复**：`base_height` 从 0.0 调整到 1.0，角色不再陷入地下
 - **代码质量**：clippy + luacheck 零警告
 
+### 2026-04-22 Phase 2.5 完成总结
+- **调试工具完善**：
+  - 实体查看器（`entities` 命令）— egui 面板，支持筛选、组件列表、点击展开详情
+  - 场景编辑器（`editor` 命令）— Building/Tree/Wall 预设，X/Z/Y 滑动条，放置/撤销/清空
+- **资源管理器**（`engine/src/asset_manager.rs`）：
+  - `AssetManager` 封装 Bevy AssetServer，跟踪 Loading/Ready/Failed 状态
+  - LRU 缓存（`lru = "0.12"`），64 条目上限，支持 invalidate / clear_unused_older_than
+  - 资产清单验证（`AssetManifest` + `ValidationError`）：必填字段、路径安全、扩展名白名单、路径唯一性、文件存在性
+  - 资产打包工具（`xmake pack-assets`）：基于 `assets/manifest.toml` 生成 `{name}-v{version}.zip`
+- **热重载扩展**：监听 `.png/.jpg/.gltf/.glb`，触发 `AssetManager::reload`
+- **测试基础设施**：
+  - Rust 集成测试 15 个（`lua_api_test.rs` 8 个 + `integration_test.rs` 5 个 + `asset_manifest_test.rs` 7 个）
+  - 基准测试（criterion）：LuaRuntime 创建、脚本加载、配置解析
+  - CI/CD：`coverage.yml`（tarpaulin）+ `release.yml`（tag 触发三平台自动发布）
+- **文档**：
+  - 所有 `src/**/*.rs` 公共 API 补全 rustdoc，`#![warn(missing_docs)` 启用
+  - Lua 文件补充 ldoc 注释，`config.ld` 配置
+  - `docs/asset-pipeline.md` 资产管线规范
+- **质量门禁全部通过**：
+  - `cargo check --features dev-tools` 零错误
+  - `cargo test --features dev-tools` 全部通过
+  - `cargo clippy --features dev-tools -- -D warnings` 零警告
+  - `cargo fmt --check` 通过
+  - `RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --features dev-tools` 零警告
+  - `luacheck game/` 零警告
+
 ### 2026-04-15 Mod 与剧本系统愿景
 - **核心定位**：引擎与剧本分离，支持任意时代/题材的互动叙事
 - **示例场景**：《基督山伯爵》复仇剧、《三国演义》权谋线、原创武侠、赛博朋克...
@@ -480,9 +519,9 @@
 - [x] 确定游戏名称
 - [x] 美术风格：极简 Low Poly（方块建筑）
 - [x] 战斗系统：实时 ARPG
-- [ ] 资源来源：程序化生成 + 自制极简资产
+- [x] 资源来源：程序化生成 + 自制极简资产
 - [x] 第一条事件链：张居正改革（1573-1582）
-- [ ] 是否支持创意工坊 (Lua 脚本天然支持)
+- [x] 是否支持创意工坊 (Lua 脚本天然支持)
 
 ---
 

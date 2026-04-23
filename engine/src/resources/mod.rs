@@ -11,7 +11,9 @@ use crate::constants::HOT_RELOAD_INTERVAL;
 /// 实体注册表：管理所有游戏实体的 ID 映射
 #[derive(Default, Resource)]
 pub struct EntityRegistry {
+    /// 按 ID 索引的实体映射
     pub by_id: HashMap<String, Entity>,
+    /// 按 ID 索引的组件数据映射
     pub components: HashMap<String, HashMap<String, serde_json::Value>>,
 }
 
@@ -45,12 +47,16 @@ impl Default for CameraState {
 /// Lua 脚本热重载状态
 #[derive(Resource)]
 pub struct ScriptHotReload {
+    /// 脚本文件路径
     pub script_path: String,
+    /// 上次修改时间
     pub last_modified: SystemTime,
+    /// 检查定时器
     pub check_timer: Timer,
 }
 
 impl ScriptHotReload {
+    /// 创建新的热重载状态
     pub fn new(script_path: &str) -> Self {
         let last_modified =
             crate::utils::get_last_modified(script_path).unwrap_or(SystemTime::UNIX_EPOCH);

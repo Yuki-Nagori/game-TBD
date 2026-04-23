@@ -15,9 +15,13 @@ use crate::resources::EntityRegistry;
 /// 场景颜色配置（从 Lua 读取）
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct SceneColorsConfig {
+    /// 墙体颜色
     pub wall: ColorRgb,
+    /// 屋顶颜色
     pub roof: ColorRgb,
+    /// 树木颜色
     pub tree: ColorRgb,
+    /// 地面颜色
     pub ground: ColorRgb,
 }
 
@@ -32,16 +36,20 @@ impl Default for SceneColorsConfig {
     }
 }
 
+/// RGB 颜色结构
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct ColorRgb {
+    /// 红色通道（0.0 - 1.0）
     pub r: f32,
+    /// 绿色通道（0.0 - 1.0）
     pub g: f32,
+    /// 蓝色通道（0.0 - 1.0）
     pub b: f32,
 }
 
 impl From<ColorRgb> for Color {
     fn from(c: ColorRgb) -> Self {
-        Color::rgb(c.r, c.g, c.b)
+        Color::srgb(c.r, c.g, c.b)
     }
 }
 
@@ -49,9 +57,13 @@ impl From<ColorRgb> for Color {
 #[derive(Debug, Clone, serde::Deserialize)]
 #[allow(dead_code)]
 pub struct SceneObjectConfig {
+    /// 对象类型（如 "building", "tree"）
     pub r#type: String,
+    /// X 坐标
     pub x: f32,
+    /// Z 坐标
     pub z: f32,
+    /// 颜色标识（可选）
     pub color: Option<String>,
 }
 
@@ -59,9 +71,13 @@ pub struct SceneObjectConfig {
 #[derive(Debug, Clone, serde::Deserialize)]
 #[allow(dead_code)]
 pub struct SceneConnectionConfig {
+    /// 目标场景 ID
     pub to: String,
+    /// 切换点 X 坐标
     pub x: f32,
+    /// 切换点 Z 坐标
     pub z: f32,
+    /// 连接名称
     pub name: String,
 }
 
@@ -69,18 +85,26 @@ pub struct SceneConnectionConfig {
 #[derive(Debug, Clone, serde::Deserialize)]
 #[allow(dead_code)]
 pub struct SceneConfig {
+    /// 场景名称
     pub name: String,
+    /// 场景描述
     pub description: String,
+    /// 出生点坐标
     pub spawn_point: HashMap<String, f32>,
+    /// 地面尺寸
     pub ground_size: f32,
+    /// 场景对象列表
     pub objects: Vec<SceneObjectConfig>,
+    /// 场景连接列表
     pub connections: Vec<SceneConnectionConfig>,
 }
 
 /// 场景总配置
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct ScenesConfig {
+    /// 当前场景 ID
     pub current: String,
+    /// 所有场景定义
     pub scenes: HashMap<String, SceneConfig>,
 }
 
@@ -114,7 +138,9 @@ impl Default for ScenesConfig {
 /// 当前场景状态
 #[derive(Resource)]
 pub struct CurrentScene {
+    /// 当前场景 ID
     pub scene_id: String,
+    /// 当前场景配置
     pub config: SceneConfig,
 }
 
@@ -143,9 +169,11 @@ impl Default for CurrentScene {
 /// 运行时颜色配置资源
 #[derive(Resource, Default)]
 pub struct SceneColorRes {
+    /// 场景颜色配置
     pub colors: SceneColorsConfig,
 }
 
+/// 场景插件
 pub struct ScenePlugin;
 
 impl Plugin for ScenePlugin {
@@ -212,7 +240,8 @@ fn spawn_scene(
     // 地面（带碰撞）：向下偏移使碰撞体顶面与视觉平面对齐
     let ground_size = current_scene.config.ground_size;
     let ground_color: Color = scene_colors.colors.ground.clone().into();
-    let ground_mesh = meshes.add(Plane3d::default().mesh().size(ground_size, ground_size));
+    // Bevy 0.14: Plane3d::new 需要法线参数
+    let ground_mesh = meshes.add(Plane3d::new(Vec3::Y, Vec2::splat(ground_size / 2.0)));
     commands.spawn((
         PbrBundle {
             mesh: ground_mesh,
@@ -371,4 +400,72 @@ fn spawn_building_blocks(
             Collider::cuboid(TREE_SIZE / 2.0, TREE_SIZE, TREE_SIZE / 2.0),
         ));
     }
+}
+
+/// 生成单个场景对象（供编辑器使用）
+pub fn spawn_scene_object(
+    commands: &mut Commands,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<StandardMaterial>>,
+    colors: &SceneColorsConfig,
+    obj_type: &str,
+    position: Vec3,
+) -> Option<Entity> {
+    let wall_color: Color = colors.wall.clone().into();
+    let _roof_color: Color = colors.roof.clone().into();
+    let tree_color: Color = colors.tree.clone().into();
+
+    let entity = match obj_type {
+        "building" => {
+            let mesh = meshes.add(Cuboid::new(WALL_SIZE, WALL_SIZE, WALL_SIZE));
+            commands
+                .spawn((
+                    PbrBundle {
+                        mesh,
+                        material: materials.add(wall_color),
+                        transform: Transform::from_translation(position),
+                        ..default()
+                    },
+                    Collider::cuboid(WALL_SIZE / 2.0, WALL_SIZE / 2.0, WALL_SIZE / 2.0),
+                    crate::components::EditorPlaced,
+                ))
+                .id()
+        }
+        "tree" => {
+            let mesh = meshes.add(Cuboid::new(TREE_SIZE, TREE_SIZE * 2.0, TREE_SIZE));
+            commands
+                .spawn((
+                    PbrBundle {
+                        mesh,
+                        material: materials.add(tree_color),
+                        transform: Transform::from_translation(position),
+                        ..default()
+                    },
+                    Collider::cuboid(TREE_SIZE / 2.0, TREE_SIZE, TREE_SIZE / 2.0),
+                    crate::components::EditorPlaced,
+                ))
+                .id()
+        }
+        "wall" => {
+            let mesh = meshes.add(Cuboid::new(WALL_SIZE, WALL_SIZE, WALL_SIZE));
+            commands
+                .spawn((
+                    PbrBundle {
+                        mesh,
+                        material: materials.add(wall_color),
+                        transform: Transform::from_translation(position),
+                        ..default()
+                    },
+                    Collider::cuboid(WALL_SIZE / 2.0, WALL_SIZE / 2.0, WALL_SIZE / 2.0),
+                    crate::components::EditorPlaced,
+                ))
+                .id()
+        }
+        _ => {
+            warn!("未知的场景对象类型: {}", obj_type);
+            return None;
+        }
+    };
+
+    Some(entity)
 }

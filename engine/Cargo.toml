@@ -1,6 +1,6 @@
 # =============================================================================
 # 明朝修仙 RPG - 引擎配置
-# 基于 Bevy 0.13 构建
+# 基于 Bevy 0.14 构建
 # =============================================================================
 
 [package]
@@ -21,10 +21,10 @@ members = ["crates/*"]
 
 [dependencies]
 # 核心引擎框架
-bevy = { version = "0.13", features = ["png", "jpeg", "webp"] }
+bevy = { version = "0.14", features = ["png", "jpeg", "webp"] }
 
 # 3D 物理引擎
-bevy_rapier3d = "0.26"
+bevy_rapier3d = "0.27"
 
 # Lua 脚本支持
 mlua = { version = "0.9", features = ["lua54", "vendored", "serialize"] }
@@ -48,10 +48,11 @@ rand = "0.9"            # 随机数
 hashbrown = "0.14"      # 高性能 HashMap
 uuid = { version = "1.7", features = ["v4"] }   # 实体ID生成
 bincode = "1.3"         # 二进制序列化（Lua Actor 通信）
+lru = "0.12"            # LRU 缓存（资源管理）
 
 # 开发模式依赖
 notify = { version = "6.1", optional = true }       # 文件监听（热重载）
-bevy_egui = { version = "0.25", optional = true, features = ["default_fonts"] }   # 调试控制台
+bevy_egui = { version = "0.28", optional = true, features = ["default_fonts"] }   # 调试控制台
 
 # =============================================================================
 # 特性标志
@@ -68,6 +69,8 @@ dev-tools = ["hot-reload"]               # 完整开发工具集
 
 [dev-dependencies]
 pretty_assertions = "1.4"    # 测试输出美化
+criterion = { version = "0.5", features = ["html_reports"] }  # 基准测试
+tempfile = "3.10"            # 临时文件（测试用）
 
 # =============================================================================
 # 编译配置：开发模式（最快的编译速度）
@@ -112,3 +115,7 @@ strip = false           # 保留符号表，用于调试
 inherits = "release"
 opt-level = "z"         # 体积优先
 lto = "fat"             # 全链接时优化
+
+[[bench]]
+name = "loading_bench"
+harness = false

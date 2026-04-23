@@ -19,6 +19,8 @@ pub enum HotReloadEvent {
     LuaScriptChanged(PathBuf),
     /// 配置文件变化
     ConfigChanged(PathBuf),
+    /// 资源文件变化
+    AssetChanged(PathBuf),
     /// 手动触发重载（F5键）
     ManualReload,
 }
@@ -45,6 +47,7 @@ use std::sync::{
 
 #[cfg(feature = "hot-reload")]
 impl HotReloadState {
+    /// 创建新的热重载状态
     pub fn new() -> (Self, Sender<notify::Event>) {
         let (tx, rx) = channel();
         (
@@ -61,6 +64,7 @@ impl HotReloadState {
 
 #[cfg(not(feature = "hot-reload"))]
 impl HotReloadState {
+    /// 创建新的热重载状态（热重载未启用）
     pub fn new() -> Self {
         Self {
             enabled: false,
@@ -84,6 +88,7 @@ impl Default for HotReloadState {
     }
 }
 
+/// 热重载插件
 pub struct HotReloadPlugin;
 
 impl Plugin for HotReloadPlugin {
@@ -193,6 +198,14 @@ fn check_file_changes(
                     info!("检测到配置文件变化: {}", path.display());
                     events.send(HotReloadEvent::ConfigChanged(path.clone()));
                     state.last_reload = elapsed;
+                } else if path_str.ends_with(".png")
+                    || path_str.ends_with(".jpg")
+                    || path_str.ends_with(".gltf")
+                    || path_str.ends_with(".glb")
+                {
+                    info!("检测到资源文件变化: {}", path.display());
+                    events.send(HotReloadEvent::AssetChanged(path.clone()));
+                    state.last_reload = elapsed;
                 }
             }
         }
@@ -215,6 +228,8 @@ fn manual_reload_system(
 fn handle_hot_reload(
     mut events: EventReader<HotReloadEvent>,
     lua: Res<LuaRuntime>,
+    mut asset_manager: ResMut<crate::asset_manager::AssetManager>,
+    asset_server: Res<AssetServer>,
     _entity_registry: ResMut<EntityRegistry>,
 ) {
     for event in events.read() {
@@ -247,6 +262,15 @@ fn handle_hot_reload(
                 } else {
                     info!("✓ 配置重载成功");
                 }
+            }
+            HotReloadEvent::AssetChanged(path) => {
+                let relative = path
+                    .strip_prefix(std::env::current_dir().unwrap().join("assets"))
+                    .unwrap_or(path);
+                let path_str = relative.to_string_lossy().to_string();
+                info!("重载资源: {}", path.display());
+                asset_manager.reload(&path_str, &asset_server);
+                info!("✓ 资源已重新加载: {}", path.display());
             }
             HotReloadEvent::ManualReload => {
                 info!("执行手动重载...");

@@ -11,6 +11,10 @@ globals = {
     -- 游戏全局配置（由 main.lua 定义）
     "GAME_CONFIG", "PLAYER_CONFIG", "PLAYER_MOVEMENT",
     "WALK_ANIMATION", "CAMERA_CONFIG", "SCENE_COLORS", "SCENE_CONFIG",
+    "COLOR_CONFIG",
+    -- 由 Rust 注入的 Lua API
+    "Entity", "Event", "World", "Player", "History",
+    "Core",
 }
 
 -- 只读全局变量
@@ -36,8 +40,10 @@ exclude_files = {
 allow_defined = true
 allow_defined_top = true
 
--- 忽略未使用的警告（游戏脚本导出全局变量供 Rust 读取）
-unused = false
+-- 启用未使用变量检查
+unused = true
+unused_args = false
+unused_globals = false  -- 允许导出全局变量供 Rust 读取
 
 -- 最大行长度
 max_line_length = 120

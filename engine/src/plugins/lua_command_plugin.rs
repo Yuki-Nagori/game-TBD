@@ -14,6 +14,7 @@ use crate::lua_api::{LuaCommand, LuaRuntime};
 use crate::resources::{EntityRegistry, ScriptHotReload};
 use crate::utils::get_last_modified;
 
+/// Lua 命令处理插件
 pub struct LuaCommandPlugin;
 
 impl Plugin for LuaCommandPlugin {
@@ -59,9 +60,9 @@ fn apply_lua_commands_system(
             LuaCommand::CreateEntity { id, entity_type } => {
                 // 3D 实体创建（替换原有的 2D SpriteBundle）
                 let (color, size) = match entity_type.as_str() {
-                    "npc" => (Color::rgb(0.2, 0.5, 0.9), 1.0),
-                    "effect" => (Color::rgb(0.9, 0.8, 0.1), 0.5),
-                    _ => (Color::rgb(0.4, 0.4, 0.4), 0.8),
+                    "npc" => (Color::srgb(0.2, 0.5, 0.9), 1.0),
+                    "effect" => (Color::srgb(0.9, 0.8, 0.1), 0.5),
+                    _ => (Color::srgb(0.4, 0.4, 0.4), 0.8),
                 };
 
                 let mesh = meshes.add(Cuboid::new(size, size, size));

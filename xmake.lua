@@ -254,7 +254,7 @@ task("check")
 
         print("=== Checking Rust code ===")
         print("Running clippy...")
-        os.exec("cargo clippy --manifest-path engine/Cargo.toml " .. mode_flag .. " --no-deps -- -D warnings")
+        os.exec("cargo clippy --manifest-path engine/Cargo.toml " .. mode_flag .. " --all-features --no-deps -- -D warnings")
         
         print("Running tests...")
         os.exec("cargo test --manifest-path engine/Cargo.toml " .. mode_flag)
@@ -438,6 +438,64 @@ task("pack-mod")
     set_menu {
         usage = "xmake pack-mod",
         description = "Pack game scripts as mod for distribution"
+    }
+task_end()
+
+-- 资产打包任务（基于 manifest.toml）
+task("pack-assets")
+    set_category("plugin")
+    on_run(function ()
+        local manifest_path = "assets/manifest.toml"
+        if not os.isfile(manifest_path) then
+            print("错误：找不到资产清单 " .. manifest_path)
+            print("请创建 assets/manifest.toml")
+            os.exit(1)
+        end
+
+        -- 解析清单（简单解析，提取 name 和 version）
+        local manifest_content = io.readfile(manifest_path)
+        local name = manifest_content:match('name%s*=%s*"([^"]+)"') or "unknown"
+        local version = manifest_content:match('version%s*=%s*"([^"]+)"') or "0.0.0"
+
+        print("打包资产: " .. name .. " v" .. version)
+
+        -- 创建临时目录
+        local tmp_dir = "build/mods/.tmp-" .. name
+        os.mkdir(tmp_dir)
+
+        -- 复制清单
+        os.cp(manifest_path, tmp_dir .. "/manifest.toml")
+
+        -- 复制所有引用的资源文件
+        for path in manifest_content:gmatch('path%s*=%s*"([^"]+)"') do
+            local src = path
+            if not path:startsWith("assets/") then
+                src = "assets/" .. path
+            end
+            if os.isfile(src) then
+                os.cp(src, tmp_dir .. "/")
+                print("  + " .. src)
+            else
+                print("  警告：文件不存在 " .. src)
+            end
+        end
+
+        -- 打包为 zip
+        local zip_name = name .. "-v" .. version .. ".zip"
+        local zip_path = "build/mods/" .. zip_name
+        if os.exists(zip_path) then
+            os.rm(zip_path)
+        end
+        os.zip(zip_path, tmp_dir .. "/*")
+
+        -- 清理临时目录
+        os.rm(tmp_dir)
+
+        print("资产包已生成: " .. zip_path)
+    end)
+    set_menu {
+        usage = "xmake pack-assets",
+        description = "Pack assets into mod bundle based on manifest.toml"
     }
 task_end()
 
