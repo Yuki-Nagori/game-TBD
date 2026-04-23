@@ -194,6 +194,12 @@ impl AssetManager {
 
     /// 使缓存失效
     pub fn invalidate(&mut self, path: &str) {
+        if matches!(
+            self.states.get(path),
+            Some(AssetLoadState::Ready { .. } | AssetLoadState::Failed { .. })
+        ) {
+            self.completed_count = self.completed_count.saturating_sub(1);
+        }
         self.cache.pop(path);
         self.states.remove(path);
         self.handles.remove(path);
@@ -209,6 +215,9 @@ impl AssetManager {
             .map(|(k, _)| k.clone())
             .collect();
         for key in keys_to_remove {
+            if matches!(self.states.get(&key), Some(AssetLoadState::Ready { .. })) {
+                self.completed_count = self.completed_count.saturating_sub(1);
+            }
             self.cache.pop(&key);
             self.states.remove(&key);
             self.handles.remove(&key);

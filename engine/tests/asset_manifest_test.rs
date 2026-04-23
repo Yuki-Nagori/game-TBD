@@ -16,7 +16,7 @@ fn test_valid_manifest() {
         name: "test-mod".to_string(),
         version: "1.0.0".to_string(),
         assets: vec![AssetEntry {
-            path: "assets/textures/test.png".to_string(),
+            path: "textures/test.png".to_string(),
             r#type: "texture".to_string(),
         }],
     };
@@ -119,11 +119,11 @@ name = "my-mod"
 version = "1.0.0"
 
 [[assets]]
-path = "assets/textures/sword.png"
+path = "textures/sword.png"
 type = "texture"
 
 [[assets]]
-path = "assets/models/hero.gltf"
+path = "models/hero.gltf"
 type = "model"
 "#;
 
@@ -139,17 +139,15 @@ fn test_load_manifest_from_file() {
     std::fs::create_dir_all(texture_path.parent().unwrap()).unwrap();
     std::fs::File::create(&texture_path).unwrap();
 
-    let toml = format!(
-        r#"
-name = "file-mod"
-version = "2.0.0"
-
-[[assets]]
-path = "{}"
-type = "texture"
-"#,
-        texture_path.to_string_lossy()
-    );
+    let manifest = AssetManifest {
+        name: "file-mod".to_string(),
+        version: "2.0.0".to_string(),
+        assets: vec![AssetEntry {
+            path: texture_path.to_string_lossy().to_string(),
+            r#type: "texture".to_string(),
+        }],
+    };
+    let toml = toml::to_string(&manifest).unwrap();
     let temp_file = create_temp_manifest(&toml);
 
     let mut manager = AssetManager::new();
@@ -160,10 +158,10 @@ type = "texture"
         "load_manifest should succeed for valid toml: {:?}",
         result.err()
     );
-    let manifest = result.unwrap();
-    assert_eq!(manifest.name, "file-mod");
-    assert_eq!(manifest.version, "2.0.0");
-    assert_eq!(manifest.assets.len(), 1);
+    let loaded = result.unwrap();
+    assert_eq!(loaded.name, "file-mod");
+    assert_eq!(loaded.version, "2.0.0");
+    assert_eq!(loaded.assets.len(), 1);
 }
 
 #[test]
