@@ -7,13 +7,23 @@
 
 #![warn(missing_docs)]
 
+/// 异步资产加载与管理
 pub mod asset_manager;
+/// ECS 组件定义
 pub mod components;
+/// 游戏常量
 pub mod constants;
+/// 核心逻辑（时间、功法）
 pub mod core;
+/// UI 字体与主题管理
+pub mod font_center;
+/// Lua 运行时与 API
 pub mod lua_api;
+/// Bevy 插件系统
 pub mod plugins;
+/// 全局状态资源
 pub mod resources;
+/// 工具函数
 pub mod utils;
 
 // 重导出常用类型

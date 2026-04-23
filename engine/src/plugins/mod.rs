@@ -8,7 +8,6 @@ pub mod lua_command_plugin;
 pub mod player_plugin;
 pub mod scene_plugin;
 
-// 调试控制台（条件编译）
 #[cfg(feature = "hot-reload")]
 pub mod debug_console_plugin;
 
@@ -16,6 +15,7 @@ use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
 use crate::asset_manager::{AssetManager, asset_manager_poll_system};
+use crate::font_center::FontCenterPlugin;
 
 use camera_plugin::CameraPlugin;
 use hot_reload_plugin::HotReloadPlugin;
@@ -34,20 +34,15 @@ impl Plugin for GamePlugin {
         app.init_resource::<AssetManager>()
             .add_systems(Update, asset_manager_poll_system)
             .add_plugins((
-                // 物理引擎
+                FontCenterPlugin,
                 RapierPhysicsPlugin::<NoUserData>::default(),
-                // 调试渲染（开发时启用）
-                // RapierDebugRenderPlugin::default(),
-                // 游戏功能插件
                 PlayerPlugin,
                 CameraPlugin,
                 ScenePlugin,
                 LuaCommandPlugin,
-                // 热重载（开发模式）
                 HotReloadPlugin,
             ));
 
-        // 调试控制台（条件编译）
         #[cfg(feature = "hot-reload")]
         {
             app.add_plugins(DebugConsolePlugin);

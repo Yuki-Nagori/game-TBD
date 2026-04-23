@@ -47,8 +47,11 @@ fn main() -> anyhow::Result<()> {
     #[cfg(feature = "hot-reload")]
     {
         use tracing_subscriber::layer::SubscriberExt;
+        let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info,ming_rpg=debug"));
         let console_layer = ConsoleLogLayer::new();
         let subscriber = tracing_subscriber::registry()
+            .with(filter)
             .with(tracing_subscriber::fmt::layer())
             .with(console_layer);
         tracing::subscriber::set_global_default(subscriber)?;
