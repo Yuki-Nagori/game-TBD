@@ -362,22 +362,19 @@ fn draw_console(
                     .desired_width(f32::INFINITY)
                     .font(egui::TextStyle::Monospace),
             );
-            let has_focus = response.has_focus();
 
-            ui.input(|i| {
-                if has_focus && i.key_pressed(egui::Key::Enter) {
-                    execute = true;
-                }
-                if has_focus && i.key_pressed(egui::Key::ArrowUp) {
-                    navigate_up = true;
-                }
-                if has_focus && i.key_pressed(egui::Key::ArrowDown) {
-                    navigate_down = true;
-                }
-                if has_focus && i.key_pressed(egui::Key::Tab) {
-                    tab_complete = true;
-                }
-            });
+            if ui.input(|i| i.key_down(egui::Key::Enter)) {
+                execute = true;
+            }
+            if ui.input(|i| i.key_down(egui::Key::ArrowUp)) {
+                navigate_up = true;
+            }
+            if ui.input(|i| i.key_down(egui::Key::ArrowDown)) {
+                navigate_down = true;
+            }
+            if ui.input(|i| i.key_down(egui::Key::Tab)) {
+                tab_complete = true;
+            }
 
             if tab_complete && !console.input_buffer.is_empty() {
                 let input = console.input_buffer.clone();
@@ -720,7 +717,7 @@ fn draw_performance_monitor(mut contexts: EguiContexts, perf_monitor: Res<Perfor
 
     egui::Window::new("性能监控")
         .default_pos([10.0, 10.0])
-        .default_size([370.0, 220.0])
+        .default_size([300.0, 220.0])
         .min_size([180.0, 200.0])
         .collapsible(true)
         .show(ctx, |ui| {
