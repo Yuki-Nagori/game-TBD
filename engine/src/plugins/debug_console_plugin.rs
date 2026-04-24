@@ -166,7 +166,7 @@ impl Plugin for DebugConsolePlugin {
         }
 
         if !app.is_plugin_added::<EguiPlugin>() {
-            app.add_plugins(EguiPlugin { enable_multipass_for_primary_context: false });
+            app.add_plugins(EguiPlugin::default());
         }
         app.init_resource::<DebugConsoleState>()
             .init_resource::<PerformanceMonitor>()
@@ -229,7 +229,7 @@ fn draw_console(
         return;
     }
 
-    let ctx = contexts.ctx_mut();
+    let ctx = contexts.ctx_mut().expect("Primary Egui context not found");
 
     egui::Window::new("调试控制台")
         .default_pos([500.0, 10.0])
@@ -509,7 +509,7 @@ fn execute_command(
         }
         "quit" | "exit" => {
             console.add_log(LogLevel::Info, "正在退出...".to_string());
-            app_exit.send(AppExit::Success);
+            app_exit.write(AppExit::Success);
         }
         _ => {
             console.add_log(LogLevel::Warn, format!("未知命令: {}", parts[0]));
@@ -533,7 +533,7 @@ fn draw_entity_viewer(
         return;
     }
 
-    let ctx = contexts.ctx_mut();
+    let ctx = contexts.ctx_mut().expect("Primary Egui context not found");
 
     egui::Window::new("实体查看器")
         .default_pos([10.0, 510.0])
@@ -628,7 +628,7 @@ fn draw_scene_editor(
         return;
     }
 
-    let ctx = contexts.ctx_mut();
+    let ctx = contexts.ctx_mut().expect("Primary Egui context not found");
 
     egui::Window::new("场景编辑器")
         .default_pos([10.0, 240.0])
@@ -695,12 +695,12 @@ fn draw_scene_editor(
                 if ui.button("撤销").clicked()
                     && let Some(entity) = editor.history.pop()
                 {
-                    commands.entity(entity).despawn_recursive();
+                    commands.entity(entity).despawn();
                 }
                 if ui.button("清空").clicked() {
                     editor.history.clear();
                     for entity in &editor_placed {
-                        commands.entity(entity).despawn_recursive();
+                        commands.entity(entity).despawn();
                     }
                 }
             });
@@ -713,7 +713,7 @@ fn draw_performance_monitor(mut contexts: EguiContexts, perf_monitor: Res<Perfor
         return;
     }
 
-    let ctx = contexts.ctx_mut();
+    let ctx = contexts.ctx_mut().expect("Primary Egui context not found");
 
     egui::Window::new("性能监控")
         .default_pos([10.0, 10.0])

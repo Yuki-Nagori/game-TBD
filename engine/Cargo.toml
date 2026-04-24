@@ -21,10 +21,10 @@ members = ["crates/*"]
 
 [dependencies]
 # 核心引擎框架
-bevy = { version = "0.16", features = ["png", "jpeg", "webp"] }
+bevy = { version = "0.17", features = ["png", "jpeg", "webp"] }
 
 # 3D 物理引擎
-bevy_rapier3d = "0.30"
+bevy_rapier3d = "0.32"
 
 # Lua 脚本支持
 mlua = { version = "0.11.6", features = ["lua55", "vendored", "serde"] }
@@ -51,7 +51,7 @@ rkyv = { version = "0.8.15", features = ["bytecheck", "uuid-1", "hashbrown-0_15"
 lru = "0.16.3"          # LRU 缓存（资源管理）
 
 # UI 框架
-bevy_egui = { version = "0.34", features = ["default_fonts"] }
+bevy_egui = { version = "0.37", features = ["default_fonts"] }
 
 # 开发模式依赖
 notify = { version = "8.2.0", optional = true }       # 文件监听（热重载）

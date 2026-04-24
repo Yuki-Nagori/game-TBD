@@ -179,8 +179,7 @@ fn spawn_player_with_fallback(
     commands
         .spawn((
             SceneRoot(scene_handle),
-            Transform::from_xyz(0.0, spawn_height, 0.0)
-                .with_scale(Vec3::splat(config.scale)),
+            Transform::from_xyz(0.0, spawn_height, 0.0).with_scale(Vec3::splat(config.scale)),
         ))
         .insert(Player)
         .insert(CharacterMotion::default())
@@ -232,7 +231,7 @@ pub fn player_input_system(
     runtime_config: Res<PlayerRuntimeConfig>,
     mut cached_direction: ResMut<CachedCameraDirection>,
 ) {
-    let Ok(camera_transform) = camera_query.get_single() else {
+    let Ok(camera_transform) = camera_query.single() else {
         return;
     };
 
@@ -304,7 +303,7 @@ pub fn invalidate_camera_cache_system(
     >,
     mut cached_direction: ResMut<CachedCameraDirection>,
 ) {
-    if camera_query.get_single().is_ok() {
+    if camera_query.single().is_ok() {
         cached_direction.is_valid = false;
     }
 }

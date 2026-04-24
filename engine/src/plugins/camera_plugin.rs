@@ -9,7 +9,7 @@
 
 use bevy::input::mouse::{MouseMotion, MouseWheel};
 use bevy::prelude::*;
-use bevy::window::{CursorGrabMode, PrimaryWindow};
+use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow};
 
 use crate::components::{Player, ThirdPersonCamera};
 use crate::constants::{
@@ -81,8 +81,7 @@ fn spawn_camera(
 
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(0.0, 10.0, config.distance)
-            .looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_xyz(0.0, 10.0, config.distance).looking_at(Vec3::ZERO, Vec3::Y),
         ThirdPersonCamera,
     ));
 
@@ -94,18 +93,18 @@ fn spawn_camera(
 /// 错误处理：
 /// - 如果窗口不存在，记录错误
 /// - 如果锁定失败（某些平台/窗口模式不支持），显示警告并继续运行
-fn setup_mouse(mut window_query: Query<&mut Window, With<PrimaryWindow>>) {
-    let Ok(mut window) = window_query.get_single_mut() else {
+fn setup_mouse(mut cursor_query: Query<&mut CursorOptions, With<PrimaryWindow>>) {
+    let Ok(mut cursor) = cursor_query.single_mut() else {
         error!("无法获取主窗口，鼠标锁定失败");
         return;
     };
 
     // 尝试锁定鼠标
-    window.cursor_options.grab_mode = CursorGrabMode::Locked;
-    window.cursor_options.visible = false;
+    cursor.grab_mode = CursorGrabMode::Locked;
+    cursor.visible = false;
 
     // 检查是否成功锁定
-    if window.cursor_options.grab_mode == CursorGrabMode::Locked {
+    if cursor.grab_mode == CursorGrabMode::Locked {
         info!("鼠标已锁定（陀螺仪模式），按 Alt 键可释放鼠标");
     } else {
         warn!("鼠标锁定失败（可能是不支持的窗口模式），按 Alt 键重试");
@@ -117,14 +116,14 @@ fn setup_mouse(mut window_query: Query<&mut Window, With<PrimaryWindow>>) {
 /// 定期检查鼠标锁定状态，确保游戏始终知道当前状态
 /// 处理边界情况：窗口失去焦点后重新获得焦点时恢复锁定
 fn check_mouse_lock_status_system(
-    window_query: Query<&Window, With<PrimaryWindow>>,
+    cursor_query: Query<&CursorOptions, With<PrimaryWindow>>,
     mut camera_state: ResMut<CameraState>,
 ) {
-    let Ok(window) = window_query.get_single() else {
+    let Ok(cursor) = cursor_query.single() else {
         return;
     };
 
-    let is_actually_locked = window.cursor_options.grab_mode == CursorGrabMode::Locked;
+    let is_actually_locked = cursor.grab_mode == CursorGrabMode::Locked;
 
     // 如果实际状态与记录状态不一致，更新记录
     if is_actually_locked != camera_state.mouse_locked {
@@ -142,26 +141,26 @@ fn check_mouse_lock_status_system(
 /// 按 Alt 键在锁定/释放鼠标之间切换
 fn toggle_mouse_lock_system(
     keyboard: Res<ButtonInput<KeyCode>>,
-    mut window_query: Query<&mut Window, With<PrimaryWindow>>,
+    mut cursor_query: Query<&mut CursorOptions, With<PrimaryWindow>>,
     mut camera_state: ResMut<CameraState>,
 ) {
-    let Ok(mut window) = window_query.get_single_mut() else {
+    let Ok(mut cursor) = cursor_query.single_mut() else {
         return;
     };
 
     // Alt 键按下时切换鼠标锁定状态
     if keyboard.just_pressed(KeyCode::AltLeft) || keyboard.just_pressed(KeyCode::AltRight) {
-        let is_locked = window.cursor_options.grab_mode == CursorGrabMode::Locked;
+        let is_locked = cursor.grab_mode == CursorGrabMode::Locked;
         if is_locked {
             // 释放鼠标
-            window.cursor_options.grab_mode = CursorGrabMode::None;
-            window.cursor_options.visible = true;
+            cursor.grab_mode = CursorGrabMode::None;
+            cursor.visible = true;
             camera_state.mouse_locked = false;
             info!("鼠标已释放（可交互模式）");
         } else {
             // 锁定鼠标
-            window.cursor_options.grab_mode = CursorGrabMode::Locked;
-            window.cursor_options.visible = false;
+            cursor.grab_mode = CursorGrabMode::Locked;
+            cursor.visible = false;
             camera_state.mouse_locked = true;
             info!("鼠标已锁定（陀螺仪模式）");
         }
@@ -174,15 +173,15 @@ fn toggle_mouse_lock_system(
 /// 仅在鼠标锁定时生效
 fn camera_mouse_follow_system(
     mut camera_state: ResMut<CameraState>,
-    window_query: Query<&Window, With<PrimaryWindow>>,
+    cursor_query: Query<&CursorOptions, With<PrimaryWindow>>,
     mut motion_events: EventReader<MouseMotion>,
 ) {
-    let Ok(window) = window_query.get_single() else {
+    let Ok(cursor) = cursor_query.single() else {
         return;
     };
 
     // 仅在鼠标锁定时处理相机旋转
-    if window.cursor_options.grab_mode != CursorGrabMode::Locked {
+    if cursor.grab_mode != CursorGrabMode::Locked {
         return;
     }
 
@@ -236,10 +235,10 @@ fn camera_follow_system(
     camera_state: Res<CameraState>,
     time: Res<Time>,
 ) {
-    let Ok(player_transform) = player_query.get_single() else {
+    let Ok(player_transform) = player_query.single() else {
         return;
     };
-    let Ok(mut camera_transform) = camera_query.get_single_mut() else {
+    let Ok(mut camera_transform) = camera_query.single_mut() else {
         return;
     };
 

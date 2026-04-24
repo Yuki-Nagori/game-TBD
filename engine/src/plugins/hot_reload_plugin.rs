@@ -13,7 +13,7 @@ use crate::lua_api::LuaRuntime;
 use crate::resources::EntityRegistry;
 
 /// 热重载事件
-#[derive(Event)]
+#[derive(Message)]
 pub enum HotReloadEvent {
     /// Lua脚本变化
     LuaScriptChanged(PathBuf),
@@ -192,11 +192,11 @@ fn check_file_changes(
                 // 只处理.lua和.toml文件
                 if path_str.ends_with(".lua") {
                     info!("检测到Lua脚本变化: {}", path.display());
-                    events.send(HotReloadEvent::LuaScriptChanged(path.clone()));
+                    events.write(HotReloadEvent::LuaScriptChanged(path.clone()));
                     state.last_reload = elapsed;
                 } else if path_str.ends_with(".toml") {
                     info!("检测到配置文件变化: {}", path.display());
-                    events.send(HotReloadEvent::ConfigChanged(path.clone()));
+                    events.write(HotReloadEvent::ConfigChanged(path.clone()));
                     state.last_reload = elapsed;
                 } else if path_str.ends_with(".png")
                     || path_str.ends_with(".jpg")
@@ -204,7 +204,7 @@ fn check_file_changes(
                     || path_str.ends_with(".glb")
                 {
                     info!("检测到资源文件变化: {}", path.display());
-                    events.send(HotReloadEvent::AssetChanged(path.clone()));
+                    events.write(HotReloadEvent::AssetChanged(path.clone()));
                     state.last_reload = elapsed;
                 }
             }
@@ -219,7 +219,7 @@ fn manual_reload_system(
 ) {
     if keyboard.just_pressed(KeyCode::F5) {
         info!("手动触发重载 (F5)");
-        events.send(HotReloadEvent::ManualReload);
+        events.write(HotReloadEvent::ManualReload);
     }
 }
 

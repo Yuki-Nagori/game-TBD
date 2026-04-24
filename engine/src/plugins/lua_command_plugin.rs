@@ -71,8 +71,8 @@ fn apply_lua_commands_system(
                 let entity = commands
                     .spawn((
                         Mesh3d(mesh),
-                                                    MeshMaterial3d(material),
-                                                    Transform::from_translation(Vec3::ZERO),
+                        MeshMaterial3d(material),
+                        Transform::from_translation(Vec3::ZERO),
                         // 添加碰撞体
                         Collider::cuboid(size / 2.0, size / 2.0, size / 2.0),
                         RigidBody::Fixed,
@@ -86,7 +86,7 @@ fn apply_lua_commands_system(
             LuaCommand::DestroyEntity { id } => {
                 lua.remove_entity_position(&id);
                 if let Some(entity) = registry.by_id.remove(&id) {
-                    commands.entity(entity).despawn_recursive();
+                    commands.entity(entity).despawn();
                     registry.components.remove(&id);
                     info!("Lua 销毁实体成功: {}", id);
                 } else {
@@ -163,7 +163,7 @@ fn hot_reload_lua_script_system(
 
     for id in ids_to_remove {
         if let Some(entity) = registry.by_id.remove(&id) {
-            commands.entity(entity).despawn_recursive();
+            commands.entity(entity).despawn();
             registry.components.remove(&id);
         }
         lua.remove_entity_position(&id);

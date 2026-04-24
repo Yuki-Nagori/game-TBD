@@ -108,10 +108,9 @@ impl LuaRuntime {
     ///
     /// 示例: `runtime.call_function("update", 0.016f32)?;`
     pub fn call_function(&self, function_name: &str, arg: f32) -> anyhow::Result<()> {
-        let args_bytes =
-            rkyv::to_bytes::<rkyv::rancor::Error>(&arg)
-                .map_err(|e| anyhow::anyhow!("序列化参数失败: {}", e))?
-                .to_vec();
+        let args_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&arg)
+            .map_err(|e| anyhow::anyhow!("序列化参数失败: {}", e))?
+            .to_vec();
 
         let (tx, rx) = channel();
 
@@ -227,8 +226,7 @@ impl LuaActor {
         let lua = Lua::new();
 
         // 注册核心 API
-        Self::register_core_api(&lua)
-            .map_err(|e| anyhow::anyhow!("注册核心 API 失败: {}", e))?;
+        Self::register_core_api(&lua).map_err(|e| anyhow::anyhow!("注册核心 API 失败: {}", e))?;
         Self::register_mod_api(&lua, Arc::clone(&command_queue), Arc::clone(&positions))
             .map_err(|e| anyhow::anyhow!("注册 Mod API 失败: {}", e))?;
 
@@ -310,9 +308,8 @@ impl LuaActor {
 
     fn call_function(&self, name: &str, args_bytes: &[u8]) -> Result<Vec<u8>, String> {
         // 反序列化参数为 f32（目前只支持单个 f32 参数）
-        let arg: f32 =
-            rkyv::from_bytes::<f32, rkyv::rancor::Error>(args_bytes)
-                .map_err(|e| format!("反序列化参数失败: {}", e))?;
+        let arg: f32 = rkyv::from_bytes::<f32, rkyv::rancor::Error>(args_bytes)
+            .map_err(|e| format!("反序列化参数失败: {}", e))?;
 
         let function: mlua::Function = self
             .lua

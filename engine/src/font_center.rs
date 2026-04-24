@@ -14,7 +14,7 @@ pub struct FontCenterPlugin;
 impl Plugin for FontCenterPlugin {
     fn build(&self, app: &mut App) {
         if !app.is_plugin_added::<EguiPlugin>() {
-            app.add_plugins(EguiPlugin { enable_multipass_for_primary_context: false });
+            app.add_plugins(EguiPlugin::default());
         }
         app.init_resource::<FontRegistry>()
             .add_systems(Startup, setup_egui_fonts);
@@ -65,7 +65,7 @@ impl FontRegistry {
 static FONT_INIT_GUARD: Mutex<bool> = Mutex::new(false);
 
 fn setup_egui_fonts(mut contexts: bevy_egui::EguiContexts, mut registry: ResMut<FontRegistry>) {
-    let ctx = contexts.ctx_mut();
+    let ctx = contexts.ctx_mut().expect("Primary Egui context not found");
 
     {
         let mut guard = FONT_INIT_GUARD.lock().unwrap();
