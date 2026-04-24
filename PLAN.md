@@ -8,7 +8,7 @@
 **类型**：3D 历史玄幻 RPG
 **时代背景**：明朝（约嘉靖至万历年间）
 **核心设定**：历史演义 + 修仙功法系统
-**技术栈**：Rust (Bevy 0.14) + Lua + xmake
+**技术栈**：Rust (Bevy 0.18) + Lua + xmake
 **平台**：桌面端 (Windows/Linux/macOS)
 
 ---
@@ -381,10 +381,10 @@
 
 1. **[x] Step 1**：非 Bevy 依赖先行升级（`thiserror`、`mlua`、`hashbrown`、`lru`、`notify` 等）
 2. **[x] Step 2**：Bevy 0.14 → 0.15（Required Components 是最大改动）
-3. **[ ] Step 3**：Bevy 0.15 → 0.16（Event 拆分 + 关系系统）— 进行中
-4. **[ ] Step 4**：Bevy 0.16 → 0.17（渲染重组 + 大量重命名）
-5. **[ ] Step 5**：Bevy 0.17 → 0.18（Entities API + Feature 调整）
-6. **[ ] Step 6**：全功能回归测试
+3. **[x] Step 3**：Bevy 0.15 → 0.16（Bundle 完全移除 → Required Components）
+4. **[x] Step 4**：Bevy 0.16 → 0.17（Event 重命名为 Message，`cursor_options` 分离为组件）
+5. **[x] Step 5**：Bevy 0.17 → 0.18（`EventWriter`/`EventReader` 类型别名移除，`add_event` → `add_message`）
+6. **[x] Step 6**：全功能回归测试（clippy 0 warnings / Rust 24 tests passed / Lua 14 tests passed）
 
 #### 2.7.4 特别风险项
 
@@ -398,7 +398,7 @@
 
 > 详细迁移指南见 [`PLAN-2.7-dependency-upgrade.md`](./PLAN-2.7-dependency-upgrade.md)
 
-**里程碑**：`cargo run` 能正常运行，所有现有功能（3D场景、角色控制、调试控制台、热重载）正常工作
+**里程碑**：✅ `cargo run` 能正常运行，所有现有功能（3D场景、角色控制、调试控制台、热重载）正常工作。xmake check 全通过。
 
 ---
 

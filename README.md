@@ -11,7 +11,7 @@
 
 ## 技术栈
 
-- **引擎**：Rust + Bevy 0.14 (ECS)
+- **引擎**：Rust + Bevy 0.18 (ECS)
 - **脚本**：Lua 5.4 (游戏逻辑)
 - **构建**：xmake + cargo
 - **美术**：极简 Low Poly（方块占位）
