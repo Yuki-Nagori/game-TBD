@@ -103,11 +103,11 @@ fn setup_mouse(mut window_query: Query<&mut Window, With<PrimaryWindow>>) {
     };
 
     // 尝试锁定鼠标
-    window.cursor.grab_mode = CursorGrabMode::Locked;
-    window.cursor.visible = false;
+    window.cursor_options.grab_mode = CursorGrabMode::Locked;
+    window.cursor_options.visible = false;
 
     // 检查是否成功锁定
-    if window.cursor.grab_mode == CursorGrabMode::Locked {
+    if window.cursor_options.grab_mode == CursorGrabMode::Locked {
         info!("鼠标已锁定（陀螺仪模式），按 Alt 键可释放鼠标");
     } else {
         warn!("鼠标锁定失败（可能是不支持的窗口模式），按 Alt 键重试");
@@ -126,7 +126,7 @@ fn check_mouse_lock_status_system(
         return;
     };
 
-    let is_actually_locked = window.cursor.grab_mode == CursorGrabMode::Locked;
+    let is_actually_locked = window.cursor_options.grab_mode == CursorGrabMode::Locked;
 
     // 如果实际状态与记录状态不一致，更新记录
     if is_actually_locked != camera_state.mouse_locked {
@@ -153,17 +153,17 @@ fn toggle_mouse_lock_system(
 
     // Alt 键按下时切换鼠标锁定状态
     if keyboard.just_pressed(KeyCode::AltLeft) || keyboard.just_pressed(KeyCode::AltRight) {
-        let is_locked = window.cursor.grab_mode == CursorGrabMode::Locked;
+        let is_locked = window.cursor_options.grab_mode == CursorGrabMode::Locked;
         if is_locked {
             // 释放鼠标
-            window.cursor.grab_mode = CursorGrabMode::None;
-            window.cursor.visible = true;
+            window.cursor_options.grab_mode = CursorGrabMode::None;
+            window.cursor_options.visible = true;
             camera_state.mouse_locked = false;
             info!("鼠标已释放（可交互模式）");
         } else {
             // 锁定鼠标
-            window.cursor.grab_mode = CursorGrabMode::Locked;
-            window.cursor.visible = false;
+            window.cursor_options.grab_mode = CursorGrabMode::Locked;
+            window.cursor_options.visible = false;
             camera_state.mouse_locked = true;
             info!("鼠标已锁定（陀螺仪模式）");
         }
@@ -184,7 +184,7 @@ fn camera_mouse_follow_system(
     };
 
     // 仅在鼠标锁定时处理相机旋转
-    if window.cursor.grab_mode != CursorGrabMode::Locked {
+    if window.cursor_options.grab_mode != CursorGrabMode::Locked {
         return;
     }
 
@@ -268,7 +268,7 @@ fn camera_follow_system(
     );
 
     // 平滑移动相机（帧率无关的指数衰减公式）
-    let smooth_factor = 1.0 - (1.0 - camera_state.smooth_factor).powf(time.delta_seconds() * 60.0);
+    let smooth_factor = 1.0 - (1.0 - camera_state.smooth_factor).powf(time.delta_secs() * 60.0);
     camera_transform.translation = camera_transform
         .translation
         .lerp(target_position, smooth_factor);

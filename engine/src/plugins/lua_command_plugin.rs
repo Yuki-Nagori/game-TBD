@@ -38,7 +38,7 @@ impl Plugin for LuaCommandPlugin {
 fn lua_update_system(lua: Res<LuaRuntime>, time: Res<Time>) {
     use tracing::error;
 
-    if let Err(err) = lua.call_function("update", time.delta_seconds()) {
+    if let Err(err) = lua.call_function("update", time.delta_secs()) {
         error!("Lua update 调用失败: {}", err);
     }
 }
@@ -71,11 +71,11 @@ fn apply_lua_commands_system(
                 let entity = commands
                     .spawn((
                         PbrBundle {
-                            mesh,
-                            material,
-                            transform: Transform::from_translation(Vec3::ZERO),
-                            ..default()
-                        },
+                                                    mesh: Mesh3d(mesh),
+                                                    material: MeshMaterial3d(material),
+                                                    transform: Transform::from_translation(Vec3::ZERO),
+                                                    ..default()
+                                                },
                         // 添加碰撞体
                         Collider::cuboid(size / 2.0, size / 2.0, size / 2.0),
                         RigidBody::Fixed,

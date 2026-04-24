@@ -244,8 +244,8 @@ fn spawn_scene(
     let ground_mesh = meshes.add(Plane3d::new(Vec3::Y, Vec2::splat(ground_size / 2.0)));
     commands.spawn((
         PbrBundle {
-            mesh: ground_mesh,
-            material: materials.add(ground_color),
+            mesh: Mesh3d(ground_mesh),
+            material: MeshMaterial3d(materials.add(ground_color)),
             transform: Transform::from_xyz(0.0, -0.1, 0.0),
             ..default()
         },
@@ -268,15 +268,15 @@ fn spawn_scene(
                 let mesh = meshes.add(Cuboid::new(WALL_SIZE, WALL_SIZE, WALL_SIZE));
                 commands.spawn((
                     PbrBundle {
-                        mesh,
-                        material: materials.add(color),
-                        transform: Transform::from_translation(Vec3::new(
-                            obj.x,
-                            WALL_SIZE / 2.0,
-                            obj.z,
-                        )),
-                        ..default()
-                    },
+                                            mesh: Mesh3d(mesh),
+                                            material: MeshMaterial3d(materials.add(color)),
+                                            transform: Transform::from_translation(Vec3::new(
+                                                obj.x,
+                                                WALL_SIZE / 2.0,
+                                                obj.z,
+                                            )),
+                                            ..default()
+                                        },
                     Collider::cuboid(WALL_SIZE / 2.0, WALL_SIZE / 2.0, WALL_SIZE / 2.0),
                 ));
             }
@@ -284,11 +284,11 @@ fn spawn_scene(
                 let mesh = meshes.add(Cuboid::new(TREE_SIZE, TREE_SIZE * 2.0, TREE_SIZE));
                 commands.spawn((
                     PbrBundle {
-                        mesh,
-                        material: materials.add(tree_color),
-                        transform: Transform::from_translation(Vec3::new(obj.x, TREE_SIZE, obj.z)),
-                        ..default()
-                    },
+                                            mesh: Mesh3d(mesh),
+                                            material: MeshMaterial3d(materials.add(tree_color)),
+                                            transform: Transform::from_translation(Vec3::new(obj.x, TREE_SIZE, obj.z)),
+                                            ..default()
+                                        },
                     Collider::cuboid(TREE_SIZE / 2.0, TREE_SIZE, TREE_SIZE / 2.0),
                 ));
             }
@@ -359,8 +359,8 @@ fn spawn_building_blocks(
     for pos in wall_positions {
         commands.spawn((
             PbrBundle {
-                mesh: wall_mesh.clone(),
-                material: materials.add(wall_color),
+                mesh: Mesh3d(wall_mesh.clone()),
+                material: MeshMaterial3d(materials.add(wall_color)),
                 transform: Transform::from_translation(pos),
                 ..default()
             },
@@ -371,8 +371,8 @@ fn spawn_building_blocks(
     // 屋顶
     commands.spawn((
         PbrBundle {
-            mesh: roof_mesh,
-            material: materials.add(roof_color),
+            mesh: Mesh3d(roof_mesh),
+            material: MeshMaterial3d(materials.add(roof_color)),
             transform: Transform::from_translation(Vec3::new(
                 -8.0,
                 WALL_SIZE / 2.0 + ROOF_SIZE / 4.0,
@@ -392,8 +392,8 @@ fn spawn_building_blocks(
     for pos in tree_positions {
         commands.spawn((
             PbrBundle {
-                mesh: tree_mesh.clone(),
-                material: materials.add(tree_color),
+                mesh: Mesh3d(tree_mesh.clone()),
+                material: MeshMaterial3d(materials.add(tree_color)),
                 transform: Transform::from_translation(pos),
                 ..default()
             },
@@ -421,11 +421,11 @@ pub fn spawn_scene_object(
             commands
                 .spawn((
                     PbrBundle {
-                        mesh,
-                        material: materials.add(wall_color),
-                        transform: Transform::from_translation(position),
-                        ..default()
-                    },
+                                            mesh: Mesh3d(mesh),
+                                            material: MeshMaterial3d(materials.add(wall_color)),
+                                            transform: Transform::from_translation(position),
+                                            ..default()
+                                        },
                     Collider::cuboid(WALL_SIZE / 2.0, WALL_SIZE / 2.0, WALL_SIZE / 2.0),
                     crate::components::EditorPlaced,
                 ))
@@ -436,11 +436,11 @@ pub fn spawn_scene_object(
             commands
                 .spawn((
                     PbrBundle {
-                        mesh,
-                        material: materials.add(tree_color),
-                        transform: Transform::from_translation(position),
-                        ..default()
-                    },
+                                            mesh: Mesh3d(mesh),
+                                            material: MeshMaterial3d(materials.add(tree_color)),
+                                            transform: Transform::from_translation(position),
+                                            ..default()
+                                        },
                     Collider::cuboid(TREE_SIZE / 2.0, TREE_SIZE, TREE_SIZE / 2.0),
                     crate::components::EditorPlaced,
                 ))
@@ -451,11 +451,11 @@ pub fn spawn_scene_object(
             commands
                 .spawn((
                     PbrBundle {
-                        mesh,
-                        material: materials.add(wall_color),
-                        transform: Transform::from_translation(position),
-                        ..default()
-                    },
+                                            mesh: Mesh3d(mesh),
+                                            material: MeshMaterial3d(materials.add(wall_color)),
+                                            transform: Transform::from_translation(position),
+                                            ..default()
+                                        },
                     Collider::cuboid(WALL_SIZE / 2.0, WALL_SIZE / 2.0, WALL_SIZE / 2.0),
                     crate::components::EditorPlaced,
                 ))

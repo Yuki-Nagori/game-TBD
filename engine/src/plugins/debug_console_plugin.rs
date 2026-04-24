@@ -870,7 +870,7 @@ fn update_performance_data(
     time: Res<Time>,
     query: Query<Entity>,
 ) {
-    let delta = time.delta_seconds();
+    let delta = time.delta_secs();
     if delta > 0.0 {
         let fps = 1.0 / delta;
         perf_monitor.current_fps = fps;

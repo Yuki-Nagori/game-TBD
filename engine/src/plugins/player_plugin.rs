@@ -178,7 +178,7 @@ fn spawn_player_with_fallback(
 
     commands
         .spawn(SceneBundle {
-            scene: scene_handle,
+            scene: SceneRoot(scene_handle),
             transform: Transform::from_xyz(0.0, spawn_height, 0.0)
                 .with_scale(Vec3::splat(config.scale)),
             ..default()
@@ -288,7 +288,7 @@ pub fn player_input_system(
         let target_rotation = Quat::from_rotation_y(motion.facing_yaw);
         transform.rotation = transform.rotation.slerp(
             target_rotation,
-            runtime_config.movement.rotation_speed * time.delta_seconds(),
+            runtime_config.movement.rotation_speed * time.delta_secs(),
         );
     }
 }
