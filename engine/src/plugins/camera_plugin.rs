@@ -80,11 +80,9 @@ fn spawn_camera(
     camera_state.smooth_factor = config.smooth_factor;
 
     commands.spawn((
-        Camera3dBundle {
-            transform: Transform::from_xyz(0.0, 10.0, config.distance)
-                .looking_at(Vec3::ZERO, Vec3::Y),
-            ..default()
-        },
+        Camera3d::default(),
+        Transform::from_xyz(0.0, 10.0, config.distance)
+            .looking_at(Vec3::ZERO, Vec3::Y),
         ThirdPersonCamera,
     ));
 

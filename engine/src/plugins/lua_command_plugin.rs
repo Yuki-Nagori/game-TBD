@@ -70,12 +70,9 @@ fn apply_lua_commands_system(
 
                 let entity = commands
                     .spawn((
-                        PbrBundle {
-                                                    mesh: Mesh3d(mesh),
-                                                    material: MeshMaterial3d(material),
-                                                    transform: Transform::from_translation(Vec3::ZERO),
-                                                    ..default()
-                                                },
+                        Mesh3d(mesh),
+                                                    MeshMaterial3d(material),
+                                                    Transform::from_translation(Vec3::ZERO),
                         // 添加碰撞体
                         Collider::cuboid(size / 2.0, size / 2.0, size / 2.0),
                         RigidBody::Fixed,

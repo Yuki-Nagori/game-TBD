@@ -177,12 +177,11 @@ fn spawn_player_with_fallback(
         .max(PLAYER_COLLIDER_HEIGHT + PLAYER_COLLIDER_RADIUS + 0.1);
 
     commands
-        .spawn(SceneBundle {
-            scene: SceneRoot(scene_handle),
-            transform: Transform::from_xyz(0.0, spawn_height, 0.0)
+        .spawn((
+            SceneRoot(scene_handle),
+            Transform::from_xyz(0.0, spawn_height, 0.0)
                 .with_scale(Vec3::splat(config.scale)),
-            ..default()
-        })
+        ))
         .insert(Player)
         .insert(CharacterMotion::default())
         .insert(PlaceholderWalkAnimation::new(spawn_height))

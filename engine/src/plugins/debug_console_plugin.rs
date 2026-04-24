@@ -166,7 +166,7 @@ impl Plugin for DebugConsolePlugin {
         }
 
         if !app.is_plugin_added::<EguiPlugin>() {
-            app.add_plugins(EguiPlugin);
+            app.add_plugins(EguiPlugin { enable_multipass_for_primary_context: false });
         }
         app.init_resource::<DebugConsoleState>()
             .init_resource::<PerformanceMonitor>()

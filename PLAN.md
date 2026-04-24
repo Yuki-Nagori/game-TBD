@@ -379,12 +379,12 @@
 
 #### 2.7.3 迁移步骤
 
-1. **Step 1**：非 Bevy 依赖先行升级（`thiserror`、`mlua`、`hashbrown`、`lru`、`notify` 等）
-2. **Step 2**：Bevy 0.14 → 0.15（Required Components 是最大改动）
-3. **Step 3**：Bevy 0.15 → 0.16（Event 拆分 + 关系系统）
-4. **Step 4**：Bevy 0.16 → 0.17（渲染重组 + 大量重命名）
-5. **Step 5**：Bevy 0.17 → 0.18（Entities API + Feature 调整）
-6. **Step 6**：全功能回归测试
+1. **[x] Step 1**：非 Bevy 依赖先行升级（`thiserror`、`mlua`、`hashbrown`、`lru`、`notify` 等）
+2. **[x] Step 2**：Bevy 0.14 → 0.15（Required Components 是最大改动）
+3. **[ ] Step 3**：Bevy 0.15 → 0.16（Event 拆分 + 关系系统）— 进行中
+4. **[ ] Step 4**：Bevy 0.16 → 0.17（渲染重组 + 大量重命名）
+5. **[ ] Step 5**：Bevy 0.17 → 0.18（Entities API + Feature 调整）
+6. **[ ] Step 6**：全功能回归测试
 
 #### 2.7.4 特别风险项
 
