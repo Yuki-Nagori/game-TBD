@@ -174,7 +174,7 @@ fn toggle_mouse_lock_system(
 fn camera_mouse_follow_system(
     mut camera_state: ResMut<CameraState>,
     cursor_query: Query<&CursorOptions, With<PrimaryWindow>>,
-    mut motion_events: EventReader<MouseMotion>,
+    mut motion_events: MessageReader<MouseMotion>,
 ) {
     let Ok(cursor) = cursor_query.single() else {
         return;
@@ -208,7 +208,7 @@ fn camera_mouse_follow_system(
 /// 使用鼠标滚轮调整相机距离
 fn camera_zoom_system(
     mut camera_state: ResMut<CameraState>,
-    mut scroll_events: EventReader<MouseWheel>,
+    mut scroll_events: MessageReader<MouseWheel>,
 ) {
     let mut scroll_delta = 0.0;
     for event in scroll_events.read() {

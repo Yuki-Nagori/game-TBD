@@ -223,7 +223,7 @@ fn draw_console(
     mut console: ResMut<DebugConsoleState>,
     mut editor: ResMut<SceneEditorState>,
     lua: Res<crate::lua_api::LuaRuntime>,
-    mut app_exit: EventWriter<AppExit>,
+    mut app_exit: MessageWriter<AppExit>,
 ) {
     if !console.visible {
         return;
@@ -250,7 +250,7 @@ fn draw_console(
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label(egui::RichText::new("筛选:").size(13.0));
-                    egui::ComboBox::from_id_source("filter_level")
+                    egui::ComboBox::from_id_salt("filter_level")
                         .width(80.0)
                         .selected_text(format!("{:?}", console.filter_level))
                         .show_ui(ui, |ui| {
@@ -440,7 +440,7 @@ fn execute_command(
     console: &mut DebugConsoleState,
     editor: &mut SceneEditorState,
     lua: &crate::lua_api::LuaRuntime,
-    app_exit: &mut EventWriter<AppExit>,
+    app_exit: &mut MessageWriter<AppExit>,
 ) {
     console.add_log(LogLevel::Info, format!("> {}", command));
 

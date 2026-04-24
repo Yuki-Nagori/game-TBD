@@ -135,7 +135,7 @@ impl Plugin for HotReloadPlugin {
                     // 保存watcher防止被drop
                     app.insert_resource(HotReloadWatcher(watcher));
                     app.insert_resource(state);
-                    app.add_event::<HotReloadEvent>();
+                    app.add_message::<HotReloadEvent>();
                     app.add_systems(Update, (check_file_changes, handle_hot_reload).chain());
                     info!("热重载系统已启动");
                 }
@@ -152,7 +152,7 @@ impl Plugin for HotReloadPlugin {
         }
 
         // 无论是否启用文件监听，都添加手动重载支持
-        app.add_event::<HotReloadEvent>();
+        app.add_message::<HotReloadEvent>();
         app.add_systems(Update, manual_reload_system);
     }
 }
@@ -169,7 +169,7 @@ use notify::RecommendedWatcher;
 #[cfg(feature = "hot-reload")]
 fn check_file_changes(
     mut state: ResMut<HotReloadState>,
-    mut events: EventWriter<HotReloadEvent>,
+    mut events: MessageWriter<HotReloadEvent>,
     time: Res<Time>,
 ) {
     if !state.enabled {
@@ -215,7 +215,7 @@ fn check_file_changes(
 /// 手动触发重载（F5键）
 fn manual_reload_system(
     keyboard: Res<ButtonInput<KeyCode>>,
-    mut events: EventWriter<HotReloadEvent>,
+    mut events: MessageWriter<HotReloadEvent>,
 ) {
     if keyboard.just_pressed(KeyCode::F5) {
         info!("手动触发重载 (F5)");
@@ -226,7 +226,7 @@ fn manual_reload_system(
 /// 处理热重载事件
 #[cfg(feature = "hot-reload")]
 fn handle_hot_reload(
-    mut events: EventReader<HotReloadEvent>,
+    mut events: MessageReader<HotReloadEvent>,
     lua: Res<LuaRuntime>,
     mut asset_manager: ResMut<crate::asset_manager::AssetManager>,
     asset_server: Res<AssetServer>,
