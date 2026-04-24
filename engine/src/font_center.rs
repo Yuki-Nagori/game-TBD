@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_egui::{EguiPlugin, egui};
+use bevy_egui::{EguiPlugin, EguiPrimaryContextPass, egui};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -17,7 +17,7 @@ impl Plugin for FontCenterPlugin {
             app.add_plugins(EguiPlugin::default());
         }
         app.init_resource::<FontRegistry>()
-            .add_systems(Startup, setup_egui_fonts);
+            .add_systems(EguiPrimaryContextPass, setup_egui_fonts);
     }
 }
 

@@ -78,7 +78,8 @@ fn main() -> anyhow::Result<()> {
     info!("Lua 运行时初始化完成（Actor 模式）");
 
     // 加载主脚本
-    lua.load_main_script("game/main.lua")?;
+    let main_script = resolve_game_path("game/main.lua");
+    lua.load_main_script(&main_script)?;
     info!("主脚本加载完成");
 
     // 启动 Bevy 应用
@@ -112,10 +113,25 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// 解析游戏路径：优先当前目录，如不存在则尝试父目录
+/// 这样无论从项目根目录还是 engine/ 目录运行都能正确找到 game/ 目录
+fn resolve_game_path<P: AsRef<Path>>(path: P) -> std::path::PathBuf {
+    let path = path.as_ref();
+    if path.exists() {
+        return path.to_path_buf();
+    }
+    // 尝试从父目录查找（当在 engine/ 下用 cargo run 时）
+    let parent = std::path::PathBuf::from("..").join(path);
+    if parent.exists() {
+        return parent;
+    }
+    path.to_path_buf() // 返回原始路径，让后续错误处理给出清晰报错
+}
+
 /// 加载游戏配置
 fn load_game_config<P: AsRef<Path>>(path: P) -> anyhow::Result<GameConfig> {
-    let path = path.as_ref();
-    let content = std::fs::read_to_string(path)
+    let path = resolve_game_path(path);
+    let content = std::fs::read_to_string(&path)
         .map_err(|e| anyhow::anyhow!("读取配置文件 {:?} 失败: {}", path, e))?;
     toml::from_str(&content).map_err(|e| anyhow::anyhow!("解析配置文件 {:?} 失败: {}", path, e))
 }
