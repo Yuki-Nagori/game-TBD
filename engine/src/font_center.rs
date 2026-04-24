@@ -101,6 +101,7 @@ fn setup_egui_fonts(mut contexts: bevy_egui::EguiContexts, mut registry: ResMut<
     );
 
     ctx.set_fonts(fonts);
+    apply_dark_theme(ctx);
 }
 
 /// 将 EGUI 全局视觉主题设为暗色

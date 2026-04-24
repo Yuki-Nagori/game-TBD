@@ -124,6 +124,8 @@ pub struct PerformanceMonitor {
     pub visible: bool,
     /// FPS 历史
     pub fps_history: VecDeque<f32>,
+    /// 帧时间历史（毫秒）
+    pub frame_time_history: VecDeque<f32>,
     /// 最大历史长度
     pub max_history: usize,
     /// 当前 FPS
@@ -228,7 +230,6 @@ fn draw_console(
     }
 
     let ctx = contexts.ctx_mut();
-    crate::font_center::apply_dark_theme(ctx);
 
     egui::Window::new("调试控制台")
         .default_pos([500.0, 10.0])
@@ -361,18 +362,19 @@ fn draw_console(
                     .desired_width(f32::INFINITY)
                     .font(egui::TextStyle::Monospace),
             );
+            let has_focus = response.has_focus();
 
             ui.input(|i| {
-                if i.key_pressed(egui::Key::Enter) {
+                if has_focus && i.key_pressed(egui::Key::Enter) {
                     execute = true;
                 }
-                if i.key_pressed(egui::Key::ArrowUp) {
+                if has_focus && i.key_pressed(egui::Key::ArrowUp) {
                     navigate_up = true;
                 }
-                if i.key_pressed(egui::Key::ArrowDown) {
+                if has_focus && i.key_pressed(egui::Key::ArrowDown) {
                     navigate_down = true;
                 }
-                if i.key_pressed(egui::Key::Tab) {
+                if has_focus && i.key_pressed(egui::Key::Tab) {
                     tab_complete = true;
                 }
             });
@@ -535,7 +537,6 @@ fn draw_entity_viewer(
     }
 
     let ctx = contexts.ctx_mut();
-    crate::font_center::apply_dark_theme(ctx);
 
     egui::Window::new("实体查看器")
         .default_pos([10.0, 510.0])
@@ -631,7 +632,6 @@ fn draw_scene_editor(
     }
 
     let ctx = contexts.ctx_mut();
-    crate::font_center::apply_dark_theme(ctx);
 
     egui::Window::new("场景编辑器")
         .default_pos([10.0, 240.0])
@@ -717,7 +717,6 @@ fn draw_performance_monitor(mut contexts: EguiContexts, perf_monitor: Res<Perfor
     }
 
     let ctx = contexts.ctx_mut();
-    crate::font_center::apply_dark_theme(ctx);
 
     egui::Window::new("性能监控")
         .default_pos([10.0, 10.0])
@@ -727,12 +726,12 @@ fn draw_performance_monitor(mut contexts: EguiContexts, perf_monitor: Res<Perfor
         .show(ctx, |ui| {
             ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
 
-            let fps_color = fps_color(perf_monitor.current_fps);
+            let fps_text_color = fps_color(perf_monitor.current_fps);
             ui.label(
                 egui::RichText::new(format!("FPS: {:.1}", perf_monitor.current_fps))
                     .size(14.0)
                     .strong()
-                    .color(fps_color),
+                    .color(fps_text_color),
             );
             ui.label(
                 egui::RichText::new(format!("平均FPS: {:.1}", perf_monitor.avg_fps))
@@ -753,12 +752,12 @@ fn draw_performance_monitor(mut contexts: EguiContexts, perf_monitor: Res<Perfor
             ui.separator();
 
             ui.label(egui::RichText::new("FPS 历史").size(12.0).strong());
-            draw_line_chart(ui, &perf_monitor.fps_history, 0.0, 120.0, fps_line_color);
+            draw_line_chart(ui, &perf_monitor.fps_history, 0.0, 120.0, fps_color);
 
             ui.separator();
 
             ui.label(egui::RichText::new("帧时间历史 (ms)").size(12.0).strong());
-            draw_line_chart(ui, &perf_monitor.fps_history, 0.0, 33.0, |v| {
+            draw_line_chart(ui, &perf_monitor.frame_time_history, 0.0, 33.0, |v| {
                 if v < 16.0 {
                     egui::Color32::from_rgb(100, 220, 120)
                 } else if v < 33.0 {
@@ -772,17 +771,6 @@ fn draw_performance_monitor(mut contexts: EguiContexts, perf_monitor: Res<Perfor
 
 /// 根据 FPS 值返回显示颜色
 fn fps_color(fps: f32) -> egui::Color32 {
-    if fps >= 60.0 {
-        egui::Color32::from_rgb(100, 220, 120)
-    } else if fps >= 30.0 {
-        egui::Color32::from_rgb(255, 200, 80)
-    } else {
-        egui::Color32::from_rgb(255, 90, 90)
-    }
-}
-
-/// 根据 FPS 值返回折线颜色（用于 FPS 图表）
-fn fps_line_color(fps: f32) -> egui::Color32 {
     if fps >= 60.0 {
         egui::Color32::from_rgb(100, 220, 120)
     } else if fps >= 30.0 {
@@ -894,6 +882,12 @@ fn update_performance_data(
         perf_monitor.fps_history.push_back(fps);
         if perf_monitor.fps_history.len() > perf_monitor.max_history {
             perf_monitor.fps_history.pop_front();
+        }
+
+        let frame_time_ms = perf_monitor.frame_time_ms;
+        perf_monitor.frame_time_history.push_back(frame_time_ms);
+        if perf_monitor.frame_time_history.len() > perf_monitor.max_history {
+            perf_monitor.frame_time_history.pop_front();
         }
 
         let sum: f32 = perf_monitor.fps_history.iter().sum();
