@@ -303,6 +303,50 @@
 
 ---
 
+### Phase 2.6: 调试控制台美化与中文支持 (Week 12)
+**目标**：提升调试控制台的视觉体验与可用性，解决中文显示问题
+
+- [x] **2.6.1 中文字体嵌入**
+  - [x] Noto Sans SC 字体嵌入 assets/fonts/
+  - [x] EGUI 字体配置（Proportional + Monospace 字体族注册）
+  - [x] 运行时自动加载中文字体
+
+- [x] **2.6.2 暗色主题**
+  - [x] 自定义 EGUI Visuals（dark 基础）
+  - [x] 统一窗口、控件、交互元素配色
+  - [x] 所有调试面板（控制台、实体查看器、场景编辑器、性能监控）应用暗色主题
+
+- [x] **2.6.3 日志可视化增强**
+  - [x] 时间戳显示（HH:MM:SS 格式）
+  - [x] 级别彩色徽章（Debug/Info/Warn/Error 圆角标签）
+  - [x] 交替行背景色，提升可读性
+  - [x] 日志文本可选中
+
+- [x] **2.6.4 性能图表**
+  - [x] FPS 历史折线图（手动 painter 绘制，颜色随 FPS 变化）
+  - [x] 帧时间折线图（0-33ms 范围）
+  - [x] 网格线、当前值标签
+
+- [x] **2.6.5 命令输入增强**
+  - [x] 上下键历史导航（保存编辑草稿）
+  - [x] Tab 自动补全（匹配已知命令前缀）
+  - [x] 回车执行后自动保持焦点
+
+- [x] **2.6.6 字体中心（重构）**
+  - [x] 从调试控制台提取字体管理，建立 `font_center.rs`
+  - [x] `bevy_egui` 从 optional 改为核心依赖
+  - [x] `FontCenterPlugin` 在 Startup 阶段注册字体，全局唯一初始化
+  - [x] `FontRegistry` 运行时查询字体元数据
+  - [x] `apply_dark_theme` 从调试面板提取为公共 API
+
+- [x] **2.6.7 窗口布局**
+  - [x] 左侧 370px：性能监控 + 场景编辑器 + 实体查看器
+  - [x] 右侧 770px：调试控制台
+
+**里程碑**：调试控制台完整支持中文显示，UI 统一暗色主题，日志可读性和性能可视化显著提升，字体管理独立为全局基础设施
+
+---
+
 ### Phase 3: RPG 核心系统 (Week 12-21)
 **目标**：功法、战斗、对话、任务系统
 
@@ -473,6 +517,26 @@
   - `cargo fmt --check` 通过
   - `RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --features dev-tools` 零警告
   - `luacheck game/` 零警告
+
+### 2026-04-23 Phase 2.6 调试控制台美化
+- **问题**：EGUI 默认无中文字体，所有中文标签显示为方框；UI 为默认灰色样式，日志可读性差；性能面板只有纯文本数字，缺乏趋势可视化；命令输入不支持历史导航和自动补全
+- **方案**：
+  - 嵌入 Noto Sans SC Regular（8MB OTF），通过 `include_bytes!` 在编译期嵌入，运行时注册到 EGUI Proportional + Monospace 字体族
+  - 自定义 EGUI Visuals 暗色主题：深灰背景（#1c1c20）、圆角窗口（8px）、协调的控件交互色
+  - 日志区域重写：时间戳（HH:MM:SS）、彩色级别徽章（圆角矩形标签）、交替行背景色、可选中文本
+  - 性能面板新增 FPS 历史折线图和帧时间折线图，使用 `ui.painter()` 手动绘制，含网格线和当前值标签
+  - 命令输入增强：上下键历史导航（保留编辑草稿）、Tab 前缀补全（匹配 9 个已知命令）
+- **结果**：调试控制台完整支持中文渲染，视觉体验统一为暗色主题，日志可读性和性能可视化显著提升，开发效率提高
+
+### 2026-04-23 字体中心建立
+- **问题**：字体逻辑散落在 `debug_console_plugin.rs` 中，每帧调用 `ctx.set_fonts()` 导致字体纹理重建；`bevy_egui` 设为 optional 依赖导致字体中心只能在 `hot-reload` feature 下使用，与底层基础设施定位矛盾
+- **方案**：
+  - 新建 `engine/src/font_center.rs`，集中管理 EGUI 字体注册和暗色主题
+  - `FontCenterPlugin` 在 Startup 阶段调用 `setup_egui_fonts`，`Mutex<bool>` 全局守卫确保仅执行一次
+  - `FontRegistry` Resource 提供运行时字体查询（`has`/`get`/`list`）
+  - `apply_dark_theme` 提取为公共函数，供所有 EGUI 面板复用
+  - `bevy_egui` 从 optional 改为核心依赖，`hot-reload` feature 仅保留 `notify`
+- **结果**：字体管理成为全局基础设施，任何 UI 插件（包括未来对话系统、存档菜单）都能复用；消除了每帧重建字体的性能隐患
 
 ### 2026-04-15 Mod 与剧本系统愿景
 - **核心定位**：引擎与剧本分离，支持任意时代/题材的互动叙事

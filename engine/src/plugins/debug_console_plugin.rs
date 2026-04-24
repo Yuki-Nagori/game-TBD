@@ -2,11 +2,23 @@
 //!
 //! 游戏中按 `~` 键呼出调试控制台
 //! 支持命令输入、日志查看、性能监控
+//!
+//! 特性：
+//! - 中文字体支持（Noto Sans SC 嵌入）
+//! - 暗色主题
+//! - 时间戳与级别徽章
+//! - FPS / 帧时间折线图
+//! - 命令历史与 Tab 补全
 
 use bevy::app::AppExit;
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, EguiPlugin, egui};
 use std::collections::VecDeque;
+
+/// 已知命令列表（用于 Tab 补全）
+const KNOWN_COMMANDS: &[&str] = &[
+    "help", "clear", "lua", "reload", "fps", "entities", "editor", "quit", "exit",
+];
 
 /// 调试控制台状态
 #[derive(Resource, Default)]
@@ -17,6 +29,10 @@ pub struct DebugConsoleState {
     pub input_buffer: String,
     /// 命令历史
     pub history: Vec<String>,
+    /// 历史导航索引（None 表示不在历史中）
+    pub history_index: Option<usize>,
+    /// 编辑中草稿（历史导航时保留原始输入）
+    pub draft_input: String,
     /// 日志缓冲区
     pub logs: VecDeque<LogEntry>,
     /// 最大日志条数
@@ -40,7 +56,7 @@ pub struct LogEntry {
     pub level: LogLevel,
     /// 日志消息
     pub message: String,
-    /// 时间戳
+    /// 时间戳（Unix 时间，秒）
     pub timestamp: f64,
 }
 
@@ -69,6 +85,38 @@ impl std::fmt::Display for LogLevel {
     }
 }
 
+impl LogLevel {
+    /// 返回级别的显示颜色
+    fn color(self) -> egui::Color32 {
+        match self {
+            LogLevel::Debug => egui::Color32::from_gray(160),
+            LogLevel::Info => egui::Color32::from_rgb(200, 200, 200),
+            LogLevel::Warn => egui::Color32::from_rgb(255, 200, 80),
+            LogLevel::Error => egui::Color32::from_rgb(255, 90, 90),
+        }
+    }
+
+    /// 返回级别的徽章背景色
+    fn badge_bg(self) -> egui::Color32 {
+        match self {
+            LogLevel::Debug => egui::Color32::from_rgb(80, 80, 100),
+            LogLevel::Info => egui::Color32::from_rgb(60, 100, 140),
+            LogLevel::Warn => egui::Color32::from_rgb(140, 110, 40),
+            LogLevel::Error => egui::Color32::from_rgb(140, 50, 50),
+        }
+    }
+
+    /// 返回级别的优先级数值（用于筛选比较）
+    fn priority(self) -> u8 {
+        match self {
+            LogLevel::Debug => 0,
+            LogLevel::Info => 1,
+            LogLevel::Warn => 2,
+            LogLevel::Error => 3,
+        }
+    }
+}
+
 /// 性能监控状态
 #[derive(Resource, Default)]
 pub struct PerformanceMonitor {
@@ -76,6 +124,8 @@ pub struct PerformanceMonitor {
     pub visible: bool,
     /// FPS 历史
     pub fps_history: VecDeque<f32>,
+    /// 帧时间历史（毫秒）
+    pub frame_time_history: VecDeque<f32>,
     /// 最大历史长度
     pub max_history: usize,
     /// 当前 FPS
@@ -106,7 +156,6 @@ pub struct DebugConsolePlugin;
 
 impl Plugin for DebugConsolePlugin {
     fn build(&self, app: &mut App) {
-        // 检查是否启用开发模式
         let dev_mode = std::env::var("MING_RPG_DEV_MODE")
             .map(|v| v == "1" || v == "true")
             .unwrap_or(false);
@@ -141,9 +190,9 @@ impl Plugin for DebugConsolePlugin {
 }
 
 fn setup_console(mut console: ResMut<DebugConsoleState>) {
-    console.max_logs = 1000;
+    console.max_logs = 200;
     console.auto_scroll = true;
-    console.filter_level = LogLevel::Debug;
+    console.filter_level = LogLevel::Info;
 }
 
 /// 切换控制台显示
@@ -152,15 +201,23 @@ fn toggle_console(
     mut console: ResMut<DebugConsoleState>,
     mut perf_monitor: ResMut<PerformanceMonitor>,
 ) {
-    // ` 键或 F1 键
     if keyboard.just_pressed(KeyCode::Backquote) || keyboard.just_pressed(KeyCode::F1) {
         console.visible = !console.visible;
-        // 同时切换性能监控
+
         perf_monitor.visible = console.visible;
     }
 }
 
-/// 绘制调试控制台
+/// 将 Unix 时间戳格式化为 HH:MM:SS
+fn timestamp_to_hhmmss(timestamp: f64) -> String {
+    let secs = timestamp as u64;
+    let hh = (secs / 3600) % 24;
+    let mm = (secs / 60) % 60;
+    let ss = secs % 60;
+    format!("{:02}:{:02}:{:02}", hh, mm, ss)
+}
+
+/// 绘制调试控制台主窗口
 fn draw_console(
     mut contexts: EguiContexts,
     mut console: ResMut<DebugConsoleState>,
@@ -175,87 +232,198 @@ fn draw_console(
     let ctx = contexts.ctx_mut();
 
     egui::Window::new("调试控制台")
-        .default_size([600.0, 400.0])
+        .default_pos([500.0, 10.0])
+        .default_size([770.0, 700.0])
+        .min_size([200.0, 400.0])
         .resizable(true)
         .show(ctx, |ui| {
-            // 工具栏
+            ui.spacing_mut().item_spacing = egui::vec2(6.0, 6.0);
+
             ui.horizontal(|ui| {
-                if ui.button("清除").clicked() {
+                if ui.button(egui::RichText::new("清除").size(13.0)).clicked() {
                     console.logs.clear();
                 }
-                ui.checkbox(&mut console.auto_scroll, "自动滚动");
+                ui.checkbox(
+                    &mut console.auto_scroll,
+                    egui::RichText::new("自动滚动").size(13.0),
+                );
 
-                ui.label("筛选:");
-                egui::ComboBox::from_label("")
-                    .selected_text(format!("{:?}", console.filter_level))
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut console.filter_level, LogLevel::Debug, "Debug");
-                        ui.selectable_value(&mut console.filter_level, LogLevel::Info, "Info");
-                        ui.selectable_value(&mut console.filter_level, LogLevel::Warn, "Warn");
-                        ui.selectable_value(&mut console.filter_level, LogLevel::Error, "Error");
-                    });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.label(egui::RichText::new("筛选:").size(13.0));
+                    egui::ComboBox::from_id_source("filter_level")
+                        .width(80.0)
+                        .selected_text(format!("{:?}", console.filter_level))
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(
+                                &mut console.filter_level,
+                                LogLevel::Debug,
+                                "Debug",
+                            );
+                            ui.selectable_value(&mut console.filter_level, LogLevel::Info, "Info");
+                            ui.selectable_value(&mut console.filter_level, LogLevel::Warn, "Warn");
+                            ui.selectable_value(
+                                &mut console.filter_level,
+                                LogLevel::Error,
+                                "Error",
+                            );
+                        });
+                });
             });
 
             ui.separator();
 
-            // 日志显示区域
             let text_style = egui::TextStyle::Monospace;
-            let row_height = ui.text_style_height(&text_style);
+            let row_height = ui.text_style_height(&text_style) + 4.0;
 
-            // 预过滤日志，避免虚拟滚动出现空白间隙
             let visible_logs: Vec<&LogEntry> = console
                 .logs
                 .iter()
-                .filter(|log| match (console.filter_level, log.level) {
-                    (LogLevel::Debug, _) => true,
-                    (LogLevel::Info, LogLevel::Debug) => false,
-                    (LogLevel::Info, _) => true,
-                    (LogLevel::Warn, LogLevel::Debug | LogLevel::Info) => false,
-                    (LogLevel::Warn, _) => true,
-                    (LogLevel::Error, LogLevel::Error) => true,
-                    (LogLevel::Error, _) => false,
-                })
+                .filter(|log| log.level.priority() >= console.filter_level.priority())
                 .collect();
 
-            // 计算是否应该在渲染后滚动到底部
             let should_scroll_to_bottom = console.auto_scroll && !visible_logs.is_empty();
             let last_index = visible_logs.len().saturating_sub(1);
 
+            let log_area_height = (ui.available_height() - 50.0).max(80.0);
+
             egui::ScrollArea::vertical()
+                .max_height(log_area_height)
                 .auto_shrink([false; 2])
                 .show_rows(ui, row_height, visible_logs.len(), |ui, row_range| {
                     for i in row_range {
                         if let Some(log) = visible_logs.get(i) {
-                            let color = match log.level {
-                                LogLevel::Debug => egui::Color32::GRAY,
-                                LogLevel::Info => egui::Color32::WHITE,
-                                LogLevel::Warn => egui::Color32::YELLOW,
-                                LogLevel::Error => egui::Color32::RED,
+                            let is_even = i % 2 == 0;
+                            let bg_color = if is_even {
+                                egui::Color32::from_rgb(26, 26, 30)
+                            } else {
+                                egui::Color32::from_rgb(22, 22, 26)
                             };
-                            let response =
-                                ui.colored_label(color, format!("[{}] {}", log.level, log.message));
-                            // 如果启用自动滚动且这是最后一行，滚动到底部
-                            if should_scroll_to_bottom && i == last_index {
-                                response.scroll_to_me(Some(egui::Align::BOTTOM));
-                            }
+
+                            ui.horizontal(|ui| {
+                                let full_width = ui.available_width();
+                                ui.set_min_size(egui::vec2(full_width, row_height));
+
+                                let row_rect = egui::Rect::from_min_size(
+                                    ui.cursor().min,
+                                    egui::vec2(full_width, row_height),
+                                );
+                                ui.painter().rect_filled(row_rect, 0.0, bg_color);
+
+                                let badge_galley = ui.painter().layout_no_wrap(
+                                    format!(" {} ", log.level),
+                                    egui::FontId::monospace(10.0),
+                                    egui::Color32::WHITE,
+                                );
+                                let badge_size = badge_galley.rect.size();
+                                let badge_rect = egui::Rect::from_min_size(
+                                    ui.cursor().min,
+                                    egui::vec2(badge_size.x + 4.0, row_height - 4.0),
+                                );
+                                ui.painter()
+                                    .rect_filled(badge_rect, 4.0, log.level.badge_bg());
+                                ui.painter().galley(
+                                    badge_rect.center() - badge_size * 0.5 + egui::vec2(2.0, 0.0),
+                                    badge_galley,
+                                    egui::Color32::WHITE,
+                                );
+                                ui.add_space(badge_rect.width() + 6.0);
+
+                                ui.label(
+                                    egui::RichText::new(timestamp_to_hhmmss(log.timestamp))
+                                        .monospace()
+                                        .size(11.0)
+                                        .color(egui::Color32::from_gray(140)),
+                                );
+                                ui.add_space(8.0);
+
+                                let msg = egui::RichText::new(&log.message)
+                                    .size(13.0)
+                                    .color(log.level.color());
+                                let response = ui.selectable_label(false, msg);
+
+                                if should_scroll_to_bottom && i == last_index {
+                                    response.scroll_to_me(Some(egui::Align::BOTTOM));
+                                }
+                            });
                         }
                     }
                 });
 
             ui.separator();
 
-            // 命令输入
-            let response = ui.text_edit_singleline(&mut console.input_buffer);
+            let mut execute = false;
+            let mut navigate_up = false;
+            let mut navigate_down = false;
+            let mut tab_complete = false;
 
-            // 按回车执行命令
-            if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                let command = console.input_buffer.clone();
-                if !command.is_empty() {
-                    execute_command(&command, &mut console, &mut editor, &lua, &mut app_exit);
-                    console.history.push(command);
-                    console.input_buffer.clear();
+            let response = ui.add(
+                egui::TextEdit::singleline(&mut console.input_buffer)
+                    .hint_text("输入命令...")
+                    .desired_width(f32::INFINITY)
+                    .font(egui::TextStyle::Monospace),
+            );
+            let has_focus = response.has_focus();
+
+            ui.input(|i| {
+                if has_focus && i.key_pressed(egui::Key::Enter) {
+                    execute = true;
                 }
-                // 重新获取焦点
+                if has_focus && i.key_pressed(egui::Key::ArrowUp) {
+                    navigate_up = true;
+                }
+                if has_focus && i.key_pressed(egui::Key::ArrowDown) {
+                    navigate_down = true;
+                }
+                if has_focus && i.key_pressed(egui::Key::Tab) {
+                    tab_complete = true;
+                }
+            });
+
+            if tab_complete && !console.input_buffer.is_empty() {
+                let input = console.input_buffer.clone();
+                if let Some(matched) = KNOWN_COMMANDS.iter().find(|cmd| cmd.starts_with(&input)) {
+                    console.input_buffer = matched.to_string();
+
+                    response.request_focus();
+                }
+            }
+
+            if navigate_up {
+                if console.history_index.is_none() && !console.input_buffer.is_empty() {
+                    console.draft_input = console.input_buffer.clone();
+                }
+                let max_idx = console.history.len().saturating_sub(1);
+                let new_idx = console
+                    .history_index
+                    .map_or(max_idx, |i| i.saturating_sub(1));
+                if !console.history.is_empty() && new_idx < console.history.len() {
+                    console.history_index = Some(new_idx);
+                    console.input_buffer = console.history[new_idx].clone();
+                }
+                response.request_focus();
+            }
+
+            if navigate_down {
+                if let Some(idx) = console.history_index {
+                    if idx + 1 < console.history.len() {
+                        let new_idx = idx + 1;
+                        console.history_index = Some(new_idx);
+                        console.input_buffer = console.history[new_idx].clone();
+                    } else {
+                        console.history_index = None;
+                        console.input_buffer = console.draft_input.clone();
+                    }
+                }
+                response.request_focus();
+            }
+
+            if execute && !console.input_buffer.is_empty() {
+                let command = console.input_buffer.clone();
+                execute_command(&command, &mut console, &mut editor, &lua, &mut app_exit);
+                console.history.push(command);
+                console.input_buffer.clear();
+                console.draft_input.clear();
+                console.history_index = None;
                 response.request_focus();
             }
         });
@@ -277,7 +445,6 @@ fn execute_command(
     lua: &crate::lua_api::LuaRuntime,
     app_exit: &mut EventWriter<AppExit>,
 ) {
-    use bevy::app::AppExit;
     console.add_log(LogLevel::Info, format!("> {}", command));
 
     let parts: Vec<&str> = command.split_whitespace().collect();
@@ -308,7 +475,6 @@ fn execute_command(
             }
             match lua.execute_with_return(&code) {
                 Ok(result_str) => {
-                    // 解析返回结果类型
                     let result = if result_str == "nil" {
                         LuaResult::Nil
                     } else {
@@ -331,7 +497,6 @@ fn execute_command(
             Err(e) => console.add_log(LogLevel::Error, format!("重载失败: {}", e)),
         },
         "fps" => {
-            // FPS显示在性能监控面板
             console.add_log(LogLevel::Info, "查看右上角性能面板".to_string());
         }
         "entities" => {
@@ -374,20 +539,25 @@ fn draw_entity_viewer(
     let ctx = contexts.ctx_mut();
 
     egui::Window::new("实体查看器")
-        .default_pos([620.0, 10.0])
-        .default_size([300.0, 400.0])
+        .default_pos([10.0, 510.0])
+        .default_size([370.0, 200.0])
+        .min_size([260.0, 200.0])
         .collapsible(true)
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.label("筛选:");
-                ui.text_edit_singleline(&mut console.entity_filter);
+                ui.label(egui::RichText::new("筛选:").size(13.0));
+                ui.add(egui::TextEdit::singleline(&mut console.entity_filter).desired_width(180.0));
                 if ui.button("关闭").clicked() {
                     console.show_entity_viewer = false;
                 }
             });
 
             ui.separator();
-            ui.label(format!("实体总数: {}", all_entities.iter().count()));
+            ui.label(
+                egui::RichText::new(format!("实体总数: {}", all_entities.iter().count()))
+                    .size(13.0)
+                    .color(egui::Color32::from_rgb(160, 200, 255)),
+            );
             ui.separator();
 
             let filter = console.entity_filter.to_lowercase();
@@ -423,7 +593,8 @@ fn draw_entity_viewer(
                     let is_selected = console.selected_entity == Some(entity);
                     let response = ui.selectable_label(
                         is_selected,
-                        format!("{} ({} 个组件)", id_str, components.len()),
+                        egui::RichText::new(format!("{} ({} 个组件)", id_str, components.len()))
+                            .size(13.0),
                     );
 
                     if response.clicked() {
@@ -433,7 +604,11 @@ fn draw_entity_viewer(
                     if is_selected {
                         ui.indent("details", |ui| {
                             for comp in &components {
-                                ui.label(format!("  - {}", comp));
+                                ui.label(
+                                    egui::RichText::new(format!("  - {}", comp))
+                                        .size(12.0)
+                                        .color(egui::Color32::from_gray(180)),
+                                );
                             }
                         });
                     }
@@ -459,34 +634,34 @@ fn draw_scene_editor(
     let ctx = contexts.ctx_mut();
 
     egui::Window::new("场景编辑器")
-        .default_pos([10.0, 170.0])
-        .default_size([200.0, 280.0])
+        .default_pos([10.0, 240.0])
+        .default_size([370.0, 260.0])
+        .min_size([180.0, 200.0])
         .collapsible(true)
         .show(ctx, |ui| {
-            ui.label("预设:");
+            ui.label(egui::RichText::new("预设:").size(13.0).strong());
             ui.horizontal(|ui| {
-                if ui
-                    .selectable_label(editor.selected_prefab == "building", "Building")
-                    .clicked()
-                {
-                    editor.selected_prefab = "building".to_string();
-                }
-                if ui
-                    .selectable_label(editor.selected_prefab == "tree", "Tree")
-                    .clicked()
-                {
-                    editor.selected_prefab = "tree".to_string();
-                }
-                if ui
-                    .selectable_label(editor.selected_prefab == "wall", "Wall")
-                    .clicked()
-                {
-                    editor.selected_prefab = "wall".to_string();
+                let presets = [("building", "Building"), ("tree", "Tree"), ("wall", "Wall")];
+                for (key, label) in presets {
+                    let selected = editor.selected_prefab == key;
+                    if ui
+                        .selectable_label(
+                            selected,
+                            egui::RichText::new(label).size(12.0).color(if selected {
+                                egui::Color32::from_rgb(120, 180, 255)
+                            } else {
+                                egui::Color32::from_gray(180)
+                            }),
+                        )
+                        .clicked()
+                    {
+                        editor.selected_prefab = key.to_string();
+                    }
                 }
             });
 
             ui.separator();
-            ui.label("位置:");
+            ui.label(egui::RichText::new("位置:").size(13.0).strong());
             ui.horizontal(|ui| {
                 ui.label("X:");
                 ui.add(egui::Slider::new(
@@ -535,7 +710,7 @@ fn draw_scene_editor(
         });
 }
 
-/// 绘制性能监控面板
+/// 绘制性能监控面板（含 FPS / 帧时间折线图）
 fn draw_performance_monitor(mut contexts: EguiContexts, perf_monitor: Res<PerformanceMonitor>) {
     if !perf_monitor.visible {
         return;
@@ -545,26 +720,151 @@ fn draw_performance_monitor(mut contexts: EguiContexts, perf_monitor: Res<Perfor
 
     egui::Window::new("性能监控")
         .default_pos([10.0, 10.0])
-        .default_size([200.0, 150.0])
+        .default_size([370.0, 220.0])
+        .min_size([180.0, 200.0])
         .collapsible(true)
         .show(ctx, |ui| {
-            ui.label(format!("FPS: {:.1}", perf_monitor.current_fps));
-            ui.label(format!("平均FPS: {:.1}", perf_monitor.avg_fps));
-            ui.label(format!("帧时间: {:.2}ms", perf_monitor.frame_time_ms));
-            ui.label(format!("实体数: {}", perf_monitor.entity_count));
+            ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
 
-            // FPS历史 (文本显示)
-            if !perf_monitor.fps_history.is_empty() {
-                ui.separator();
-                // 检查历史记录非空后再计算平均FPS，避免除零
-                let history_len = perf_monitor.fps_history.len();
-                if history_len > 0 {
-                    let avg_fps: f32 =
-                        perf_monitor.fps_history.iter().sum::<f32>() / history_len as f32;
-                    ui.label(format!("平均 FPS: {:.1}", avg_fps));
+            let fps_text_color = fps_color(perf_monitor.current_fps);
+            ui.label(
+                egui::RichText::new(format!("FPS: {:.1}", perf_monitor.current_fps))
+                    .size(14.0)
+                    .strong()
+                    .color(fps_text_color),
+            );
+            ui.label(
+                egui::RichText::new(format!("平均FPS: {:.1}", perf_monitor.avg_fps))
+                    .size(12.0)
+                    .color(egui::Color32::from_gray(180)),
+            );
+            ui.label(
+                egui::RichText::new(format!("帧时间: {:.2}ms", perf_monitor.frame_time_ms))
+                    .size(12.0)
+                    .color(egui::Color32::from_gray(180)),
+            );
+            ui.label(
+                egui::RichText::new(format!("实体数: {}", perf_monitor.entity_count))
+                    .size(12.0)
+                    .color(egui::Color32::from_gray(180)),
+            );
+
+            ui.separator();
+
+            ui.label(egui::RichText::new("FPS 历史").size(12.0).strong());
+            draw_line_chart(ui, &perf_monitor.fps_history, 0.0, 120.0, fps_color);
+
+            ui.separator();
+
+            ui.label(egui::RichText::new("帧时间历史 (ms)").size(12.0).strong());
+            draw_line_chart(ui, &perf_monitor.frame_time_history, 0.0, 33.0, |v| {
+                if v < 16.0 {
+                    egui::Color32::from_rgb(100, 220, 120)
+                } else if v < 33.0 {
+                    egui::Color32::from_rgb(255, 200, 80)
+                } else {
+                    egui::Color32::from_rgb(255, 90, 90)
                 }
-            }
+            });
         });
+}
+
+/// 根据 FPS 值返回显示颜色
+fn fps_color(fps: f32) -> egui::Color32 {
+    if fps >= 60.0 {
+        egui::Color32::from_rgb(100, 220, 120)
+    } else if fps >= 30.0 {
+        egui::Color32::from_rgb(255, 200, 80)
+    } else {
+        egui::Color32::from_rgb(255, 90, 90)
+    }
+}
+
+/// 在 UI 中绘制折线图
+///
+/// `values` 是原始值队列，`min`/`max` 是 Y 轴范围，`color_fn` 根据当前值决定线条颜色
+fn draw_line_chart(
+    ui: &mut egui::Ui,
+    values: &VecDeque<f32>,
+    min: f32,
+    max: f32,
+    color_fn: impl Fn(f32) -> egui::Color32,
+) {
+    let desired_size = egui::vec2(ui.available_width(), 48.0);
+    let (rect, _response) = ui.allocate_exact_size(desired_size, egui::Sense::hover());
+
+    if values.len() < 2 {
+        ui.painter()
+            .rect_filled(rect, 4.0, egui::Color32::from_gray(24));
+        ui.painter().text(
+            rect.center(),
+            egui::Align2::CENTER_CENTER,
+            "收集数据中...",
+            egui::FontId::proportional(11.0),
+            egui::Color32::from_gray(100),
+        );
+        return;
+    }
+
+    let painter = ui.painter_at(rect);
+    let bg_color = egui::Color32::from_gray(22);
+    painter.rect_filled(rect, 4.0, bg_color);
+
+    let grid_color = egui::Color32::from_gray(40);
+    for i in 1..4 {
+        let t = i as f32 / 4.0;
+        let y = rect.bottom() - t * rect.height();
+        painter.hline(rect.x_range(), y, egui::Stroke::new(1.0, grid_color));
+    }
+
+    let range = max - min;
+    if range <= 0.0 {
+        return;
+    }
+
+    let len = values.len();
+    let points: Vec<egui::Pos2> = values
+        .iter()
+        .enumerate()
+        .map(|(i, &v)| {
+            let x = rect.left() + (i as f32 / (len.saturating_sub(1) as f32)) * rect.width();
+            let t = ((v - min) / range).clamp(0.0, 1.0);
+            let y = rect.bottom() - t * rect.height();
+            egui::pos2(x, y.clamp(rect.top(), rect.bottom()))
+        })
+        .collect();
+
+    if points.len() >= 2 {
+        let last_val = values.back().copied().unwrap_or(0.0);
+        let main_color = color_fn(last_val);
+        painter.add(egui::Shape::line(
+            points.clone(),
+            egui::Stroke::new(1.5, main_color),
+        ));
+
+        if let Some(&last_point) = points.last() {
+            painter.circle_filled(last_point, 3.0, main_color);
+        }
+    }
+
+    if let Some(&latest) = values.back() {
+        let label = format!("{:.1}", latest);
+        let galley = painter.layout_no_wrap(
+            label,
+            egui::FontId::proportional(10.0),
+            egui::Color32::WHITE,
+        );
+        let label_pos = egui::pos2(rect.right() - galley.rect.width() - 4.0, rect.top() + 2.0);
+        painter.rect_filled(
+            egui::Rect::from_min_size(
+                label_pos - egui::vec2(2.0, 0.0),
+                galley.rect.size() + egui::vec2(4.0, 2.0),
+            ),
+            2.0,
+            egui::Color32::from_black_alpha(180),
+        );
+        painter.galley(label_pos, galley, egui::Color32::WHITE);
+    }
 }
 
 /// 更新性能数据
@@ -573,25 +873,27 @@ fn update_performance_data(
     time: Res<Time>,
     query: Query<Entity>,
 ) {
-    // 计算FPS
     let delta = time.delta_seconds();
     if delta > 0.0 {
         let fps = 1.0 / delta;
         perf_monitor.current_fps = fps;
         perf_monitor.frame_time_ms = delta * 1000.0;
 
-        // 添加到历史（使用 VecDeque 避免 O(n) remove(0)）
         perf_monitor.fps_history.push_back(fps);
         if perf_monitor.fps_history.len() > perf_monitor.max_history {
             perf_monitor.fps_history.pop_front();
         }
 
-        // 计算平均FPS（历史记录在push_back后至少有一个元素）
+        let frame_time_ms = perf_monitor.frame_time_ms;
+        perf_monitor.frame_time_history.push_back(frame_time_ms);
+        if perf_monitor.frame_time_history.len() > perf_monitor.max_history {
+            perf_monitor.frame_time_history.pop_front();
+        }
+
         let sum: f32 = perf_monitor.fps_history.iter().sum();
         perf_monitor.avg_fps = sum / perf_monitor.fps_history.len().max(1) as f32;
     }
 
-    // 更新实体数量
     perf_monitor.entity_count = query.iter().count();
 }
 
@@ -605,14 +907,13 @@ impl DebugConsoleState {
 
         self.logs.push_back(LogEntry { level, message, timestamp });
 
-        // 限制日志数量（使用 pop_front 避免 O(n) remove(0)）
         if self.logs.len() > self.max_logs {
             self.logs.pop_front();
         }
     }
 }
 
-/// 全局日志接收器（将tracing日志转发到控制台）
+/// 全局日志接收器（将 tracing 日志转发到控制台）
 pub struct ConsoleLogLayer {
     /// 日志发送通道
     sender: std::sync::mpsc::Sender<LogEntry>,
@@ -639,7 +940,6 @@ impl ConsoleLogLayer {
 fn receive_logs(mut console: ResMut<DebugConsoleState>) {
     if let Some(receiver) = LOG_RECEIVER.get() {
         let rx = receiver.lock().unwrap();
-        // 非阻塞地接收所有可用日志
         while let Ok(entry) = rx.try_recv() {
             console.add_log(entry.level, entry.message);
         }
@@ -658,7 +958,6 @@ where
         let mut message = String::new();
         event.record(&mut MessageVisitor(&mut message));
 
-        // 如果没有提取到消息（空字符串），使用事件名称
         if message.is_empty() {
             message = event.metadata().name().to_string();
         }
@@ -679,23 +978,16 @@ where
                 .as_secs_f64(),
         };
 
-        // 忽略发送失败（接收端可能已被丢弃）
         let _ = self.sender.send(entry);
     }
 }
 
-/// 用于从tracing事件中提取消息
+/// 用于从 tracing 事件中提取消息
 struct MessageVisitor<'a>(&'a mut String);
 
 impl<'a> tracing::field::Visit for MessageVisitor<'a> {
     fn record_debug(&mut self, field: &tracing::field::Field, _value: &dyn std::fmt::Debug) {
-        if field.name() == "message" {
-            // 优先尝试record_str，避免Debug格式化的引号
-            // 如果值实现了Display，这里会被调用两次：
-            // 1. 第一次尝试record_str（如果值是字符串）
-            // 2. 如果没有实现record_str，则调用record_debug
-            // 因此这里先不处理，让record_str优先
-        }
+        if field.name() == "message" {}
     }
 
     fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
