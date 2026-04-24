@@ -47,7 +47,7 @@ chrono = "0.4"          # 时间处理（游戏内日期）
 rand = "0.9"            # 随机数
 hashbrown = "0.16.1"    # 高性能 HashMap
 uuid = { version = "1.16", features = ["v4"] }   # 实体ID生成
-rkyv = { version = "0.8.15", features = ["bytecheck", "uuid-1", "hashbrown-0_15"] }  # 零拷贝二进制序列化（Lua Actor 通信）
+rkyv = { version = "0.8.15", features = ["bytecheck", "uuid-1"] }  # 零拷贝二进制序列化（Lua Actor 通信）
 lru = "0.16.3"          # LRU 缓存（资源管理）
 
 # UI 框架

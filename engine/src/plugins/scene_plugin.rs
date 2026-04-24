@@ -239,7 +239,7 @@ fn spawn_scene(
     // 地面（带碰撞）：向下偏移使碰撞体顶面与视觉平面对齐
     let ground_size = current_scene.config.ground_size;
     let ground_color: Color = scene_colors.colors.ground.clone().into();
-    // Bevy 0.14: Plane3d::new 需要法线参数
+    // Plane3d::new takes a normal vector and half-extents
     let ground_mesh = meshes.add(Plane3d::new(Vec3::Y, Vec2::splat(ground_size / 2.0)));
     commands.spawn((
         Mesh3d(ground_mesh),
