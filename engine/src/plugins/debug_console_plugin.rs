@@ -166,7 +166,7 @@ impl Plugin for DebugConsolePlugin {
         }
 
         if !app.is_plugin_added::<EguiPlugin>() {
-            app.add_plugins(EguiPlugin);
+            app.add_plugins(EguiPlugin::default());
         }
         app.init_resource::<DebugConsoleState>()
             .init_resource::<PerformanceMonitor>()
@@ -223,13 +223,13 @@ fn draw_console(
     mut console: ResMut<DebugConsoleState>,
     mut editor: ResMut<SceneEditorState>,
     lua: Res<crate::lua_api::LuaRuntime>,
-    mut app_exit: EventWriter<AppExit>,
+    mut app_exit: MessageWriter<AppExit>,
 ) {
     if !console.visible {
         return;
     }
 
-    let ctx = contexts.ctx_mut();
+    let ctx = contexts.ctx_mut().expect("Primary Egui context not found");
 
     egui::Window::new("调试控制台")
         .default_pos([500.0, 10.0])
@@ -250,7 +250,7 @@ fn draw_console(
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label(egui::RichText::new("筛选:").size(13.0));
-                    egui::ComboBox::from_id_source("filter_level")
+                    egui::ComboBox::from_id_salt("filter_level")
                         .width(80.0)
                         .selected_text(format!("{:?}", console.filter_level))
                         .show_ui(ui, |ui| {
@@ -440,7 +440,7 @@ fn execute_command(
     console: &mut DebugConsoleState,
     editor: &mut SceneEditorState,
     lua: &crate::lua_api::LuaRuntime,
-    app_exit: &mut EventWriter<AppExit>,
+    app_exit: &mut MessageWriter<AppExit>,
 ) {
     console.add_log(LogLevel::Info, format!("> {}", command));
 
@@ -509,7 +509,7 @@ fn execute_command(
         }
         "quit" | "exit" => {
             console.add_log(LogLevel::Info, "正在退出...".to_string());
-            app_exit.send(AppExit::Success);
+            app_exit.write(AppExit::Success);
         }
         _ => {
             console.add_log(LogLevel::Warn, format!("未知命令: {}", parts[0]));
@@ -533,7 +533,7 @@ fn draw_entity_viewer(
         return;
     }
 
-    let ctx = contexts.ctx_mut();
+    let ctx = contexts.ctx_mut().expect("Primary Egui context not found");
 
     egui::Window::new("实体查看器")
         .default_pos([10.0, 510.0])
@@ -628,7 +628,7 @@ fn draw_scene_editor(
         return;
     }
 
-    let ctx = contexts.ctx_mut();
+    let ctx = contexts.ctx_mut().expect("Primary Egui context not found");
 
     egui::Window::new("场景编辑器")
         .default_pos([10.0, 240.0])
@@ -695,12 +695,12 @@ fn draw_scene_editor(
                 if ui.button("撤销").clicked()
                     && let Some(entity) = editor.history.pop()
                 {
-                    commands.entity(entity).despawn_recursive();
+                    commands.entity(entity).despawn();
                 }
                 if ui.button("清空").clicked() {
                     editor.history.clear();
                     for entity in &editor_placed {
-                        commands.entity(entity).despawn_recursive();
+                        commands.entity(entity).despawn();
                     }
                 }
             });
@@ -713,7 +713,7 @@ fn draw_performance_monitor(mut contexts: EguiContexts, perf_monitor: Res<Perfor
         return;
     }
 
-    let ctx = contexts.ctx_mut();
+    let ctx = contexts.ctx_mut().expect("Primary Egui context not found");
 
     egui::Window::new("性能监控")
         .default_pos([10.0, 10.0])
@@ -870,7 +870,7 @@ fn update_performance_data(
     time: Res<Time>,
     query: Query<Entity>,
 ) {
-    let delta = time.delta_seconds();
+    let delta = time.delta_secs();
     if delta > 0.0 {
         let fps = 1.0 / delta;
         perf_monitor.current_fps = fps;

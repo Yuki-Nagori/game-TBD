@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_egui::{EguiPlugin, egui};
+use bevy_egui::{EguiPlugin, EguiPrimaryContextPass, egui};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -14,10 +14,10 @@ pub struct FontCenterPlugin;
 impl Plugin for FontCenterPlugin {
     fn build(&self, app: &mut App) {
         if !app.is_plugin_added::<EguiPlugin>() {
-            app.add_plugins(EguiPlugin);
+            app.add_plugins(EguiPlugin::default());
         }
         app.init_resource::<FontRegistry>()
-            .add_systems(Startup, setup_egui_fonts);
+            .add_systems(EguiPrimaryContextPass, setup_egui_fonts);
     }
 }
 
@@ -65,7 +65,7 @@ impl FontRegistry {
 static FONT_INIT_GUARD: Mutex<bool> = Mutex::new(false);
 
 fn setup_egui_fonts(mut contexts: bevy_egui::EguiContexts, mut registry: ResMut<FontRegistry>) {
-    let ctx = contexts.ctx_mut();
+    let ctx = contexts.ctx_mut().expect("Primary Egui context not found");
 
     {
         let mut guard = FONT_INIT_GUARD.lock().unwrap();
@@ -79,7 +79,7 @@ fn setup_egui_fonts(mut contexts: bevy_egui::EguiContexts, mut registry: ResMut<
 
     fonts.font_data.insert(
         FONT_NOTO_SANS_SC.to_owned(),
-        egui::FontData::from_owned(NOTO_SANS_SC.to_vec()),
+        std::sync::Arc::new(egui::FontData::from_owned(NOTO_SANS_SC.to_vec())),
     );
     fonts
         .families
@@ -107,11 +107,11 @@ fn setup_egui_fonts(mut contexts: bevy_egui::EguiContexts, mut registry: ResMut<
 /// 将 EGUI 全局视觉主题设为暗色
 pub fn apply_dark_theme(ctx: &egui::Context) {
     let mut visuals = egui::Visuals::dark();
-    visuals.window_rounding = egui::Rounding::same(8.0);
+    visuals.window_corner_radius = egui::CornerRadius::same(8);
     visuals.window_shadow = egui::epaint::Shadow {
-        offset: egui::vec2(0.0, 8.0),
-        blur: 16.0,
-        spread: 0.0,
+        offset: [0, 8],
+        blur: 16,
+        spread: 0,
         color: egui::Color32::from_black_alpha(128),
     };
     visuals.window_fill = egui::Color32::from_rgb(28, 28, 32);

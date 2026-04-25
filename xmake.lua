@@ -257,7 +257,7 @@ task("check")
         os.exec("cargo clippy --manifest-path engine/Cargo.toml " .. mode_flag .. " --all-features --no-deps -- -D warnings")
         
         print("Running tests...")
-        os.exec("cargo test --manifest-path engine/Cargo.toml " .. mode_flag)
+        os.exec("cargo test --manifest-path engine/Cargo.toml " .. mode_flag .. " --features dev-tools -j 2")
         
         print("\n=== Checking Lua code ===")
         if try {function () return os.iorunv("which", {"luacheck"}) end} then

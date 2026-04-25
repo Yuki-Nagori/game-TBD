@@ -177,12 +177,10 @@ fn spawn_player_with_fallback(
         .max(PLAYER_COLLIDER_HEIGHT + PLAYER_COLLIDER_RADIUS + 0.1);
 
     commands
-        .spawn(SceneBundle {
-            scene: scene_handle,
-            transform: Transform::from_xyz(0.0, spawn_height, 0.0)
-                .with_scale(Vec3::splat(config.scale)),
-            ..default()
-        })
+        .spawn((
+            SceneRoot(scene_handle),
+            Transform::from_xyz(0.0, spawn_height, 0.0).with_scale(Vec3::splat(config.scale)),
+        ))
         .insert(Player)
         .insert(CharacterMotion::default())
         .insert(PlaceholderWalkAnimation::new(spawn_height))
@@ -233,7 +231,7 @@ pub fn player_input_system(
     runtime_config: Res<PlayerRuntimeConfig>,
     mut cached_direction: ResMut<CachedCameraDirection>,
 ) {
-    let Ok(camera_transform) = camera_query.get_single() else {
+    let Ok(camera_transform) = camera_query.single() else {
         return;
     };
 
@@ -288,7 +286,7 @@ pub fn player_input_system(
         let target_rotation = Quat::from_rotation_y(motion.facing_yaw);
         transform.rotation = transform.rotation.slerp(
             target_rotation,
-            runtime_config.movement.rotation_speed * time.delta_seconds(),
+            runtime_config.movement.rotation_speed * time.delta_secs(),
         );
     }
 }
@@ -305,7 +303,7 @@ pub fn invalidate_camera_cache_system(
     >,
     mut cached_direction: ResMut<CachedCameraDirection>,
 ) {
-    if camera_query.get_single().is_ok() {
+    if camera_query.single().is_ok() {
         cached_direction.is_valid = false;
     }
 }

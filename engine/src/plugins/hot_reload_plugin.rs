@@ -13,7 +13,7 @@ use crate::lua_api::LuaRuntime;
 use crate::resources::EntityRegistry;
 
 /// 热重载事件
-#[derive(Event)]
+#[derive(Message)]
 pub enum HotReloadEvent {
     /// Lua脚本变化
     LuaScriptChanged(PathBuf),
@@ -135,7 +135,7 @@ impl Plugin for HotReloadPlugin {
                     // 保存watcher防止被drop
                     app.insert_resource(HotReloadWatcher(watcher));
                     app.insert_resource(state);
-                    app.add_event::<HotReloadEvent>();
+                    app.add_message::<HotReloadEvent>();
                     app.add_systems(Update, (check_file_changes, handle_hot_reload).chain());
                     info!("热重载系统已启动");
                 }
@@ -152,7 +152,7 @@ impl Plugin for HotReloadPlugin {
         }
 
         // 无论是否启用文件监听，都添加手动重载支持
-        app.add_event::<HotReloadEvent>();
+        app.add_message::<HotReloadEvent>();
         app.add_systems(Update, manual_reload_system);
     }
 }
@@ -169,7 +169,7 @@ use notify::RecommendedWatcher;
 #[cfg(feature = "hot-reload")]
 fn check_file_changes(
     mut state: ResMut<HotReloadState>,
-    mut events: EventWriter<HotReloadEvent>,
+    mut events: MessageWriter<HotReloadEvent>,
     time: Res<Time>,
 ) {
     if !state.enabled {
@@ -192,11 +192,11 @@ fn check_file_changes(
                 // 只处理.lua和.toml文件
                 if path_str.ends_with(".lua") {
                     info!("检测到Lua脚本变化: {}", path.display());
-                    events.send(HotReloadEvent::LuaScriptChanged(path.clone()));
+                    events.write(HotReloadEvent::LuaScriptChanged(path.clone()));
                     state.last_reload = elapsed;
                 } else if path_str.ends_with(".toml") {
                     info!("检测到配置文件变化: {}", path.display());
-                    events.send(HotReloadEvent::ConfigChanged(path.clone()));
+                    events.write(HotReloadEvent::ConfigChanged(path.clone()));
                     state.last_reload = elapsed;
                 } else if path_str.ends_with(".png")
                     || path_str.ends_with(".jpg")
@@ -204,7 +204,7 @@ fn check_file_changes(
                     || path_str.ends_with(".glb")
                 {
                     info!("检测到资源文件变化: {}", path.display());
-                    events.send(HotReloadEvent::AssetChanged(path.clone()));
+                    events.write(HotReloadEvent::AssetChanged(path.clone()));
                     state.last_reload = elapsed;
                 }
             }
@@ -215,18 +215,18 @@ fn check_file_changes(
 /// 手动触发重载（F5键）
 fn manual_reload_system(
     keyboard: Res<ButtonInput<KeyCode>>,
-    mut events: EventWriter<HotReloadEvent>,
+    mut events: MessageWriter<HotReloadEvent>,
 ) {
     if keyboard.just_pressed(KeyCode::F5) {
         info!("手动触发重载 (F5)");
-        events.send(HotReloadEvent::ManualReload);
+        events.write(HotReloadEvent::ManualReload);
     }
 }
 
 /// 处理热重载事件
 #[cfg(feature = "hot-reload")]
 fn handle_hot_reload(
-    mut events: EventReader<HotReloadEvent>,
+    mut events: MessageReader<HotReloadEvent>,
     lua: Res<LuaRuntime>,
     mut asset_manager: ResMut<crate::asset_manager::AssetManager>,
     asset_server: Res<AssetServer>,
