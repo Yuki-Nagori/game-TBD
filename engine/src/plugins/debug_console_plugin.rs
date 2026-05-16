@@ -12,7 +12,7 @@
 
 use bevy::app::AppExit;
 use bevy::prelude::*;
-use bevy_egui::{EguiContexts, EguiPlugin, egui};
+use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, egui};
 use std::collections::VecDeque;
 
 /// 已知命令列表（用于 Tab 补全）
@@ -136,6 +136,8 @@ pub struct PerformanceMonitor {
     pub frame_time_ms: f32,
     /// 实体数量
     pub entity_count: usize,
+    /// Lua 内存使用量（KB）
+    pub lua_memory_kb: f64,
 }
 
 /// 场景编辑器状态
@@ -149,6 +151,22 @@ pub struct SceneEditorState {
     pub placement_position: Vec3,
     /// 放置历史（用于撤销）
     pub history: Vec<Entity>,
+}
+
+fn console_visible(console: Res<DebugConsoleState>) -> bool {
+    console.visible
+}
+
+fn perf_monitor_visible(perf: Res<PerformanceMonitor>) -> bool {
+    perf.visible
+}
+
+fn entity_viewer_visible(console: Res<DebugConsoleState>) -> bool {
+    console.show_entity_viewer
+}
+
+fn scene_editor_enabled(editor: Res<SceneEditorState>) -> bool {
+    editor.enabled
 }
 
 /// 调试控制台插件
@@ -172,27 +190,54 @@ impl Plugin for DebugConsolePlugin {
             .init_resource::<PerformanceMonitor>()
             .init_resource::<SceneEditorState>()
             .add_systems(Startup, setup_console)
+            .add_systems(Update, toggle_console.in_set(super::GameSystemSet::Debug))
             .add_systems(
                 Update,
-                (
-                    toggle_console,
-                    draw_console,
-                    draw_entity_viewer,
-                    draw_scene_editor,
-                    draw_performance_monitor,
-                    update_performance_data,
-                    receive_logs,
-                ),
+                (update_performance_data, receive_logs)
+                    .run_if(console_visible)
+                    .in_set(super::GameSystemSet::Debug),
+            )
+            .add_systems(
+                EguiPrimaryContextPass,
+                draw_console
+                    .run_if(console_visible)
+                    .in_set(super::GameSystemSet::Debug),
+            )
+            .add_systems(
+                EguiPrimaryContextPass,
+                draw_performance_monitor
+                    .run_if(console_visible)
+                    .run_if(perf_monitor_visible)
+                    .in_set(super::GameSystemSet::Debug),
+            )
+            .add_systems(
+                EguiPrimaryContextPass,
+                draw_entity_viewer
+                    .run_if(console_visible)
+                    .run_if(entity_viewer_visible)
+                    .in_set(super::GameSystemSet::Debug),
+            )
+            .add_systems(
+                EguiPrimaryContextPass,
+                draw_scene_editor
+                    .run_if(console_visible)
+                    .run_if(scene_editor_enabled)
+                    .in_set(super::GameSystemSet::Debug),
             );
 
         info!("调试控制台已启动（按 ~ 键呼出）");
     }
 }
 
-fn setup_console(mut console: ResMut<DebugConsoleState>) {
+fn setup_console(mut console: ResMut<DebugConsoleState>, mut perf: ResMut<PerformanceMonitor>) {
     console.max_logs = 200;
     console.auto_scroll = true;
     console.filter_level = LogLevel::Info;
+
+    // 预分配性能监控历史缓冲区，避免运行时扩容
+    perf.max_history = 120;
+    perf.fps_history = VecDeque::with_capacity(perf.max_history);
+    perf.frame_time_history = VecDeque::with_capacity(perf.max_history);
 }
 
 /// 切换控制台显示
@@ -214,7 +259,16 @@ fn timestamp_to_hhmmss(timestamp: f64) -> String {
     let hh = (secs / 3600) % 24;
     let mm = (secs / 60) % 60;
     let ss = secs % 60;
-    format!("{:02}:{:02}:{:02}", hh, mm, ss)
+    let mut buf = String::with_capacity(8);
+    buf.push((b'0' + (hh / 10) as u8) as char);
+    buf.push((b'0' + (hh % 10) as u8) as char);
+    buf.push(':');
+    buf.push((b'0' + (mm / 10) as u8) as char);
+    buf.push((b'0' + (mm % 10) as u8) as char);
+    buf.push(':');
+    buf.push((b'0' + (ss / 10) as u8) as char);
+    buf.push((b'0' + (ss % 10) as u8) as char);
+    buf
 }
 
 /// 绘制调试控制台主窗口
@@ -518,16 +572,19 @@ fn execute_command(
 }
 
 /// 绘制实体查看器面板
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::type_complexity)]
 fn draw_entity_viewer(
     mut contexts: EguiContexts,
     mut console: ResMut<DebugConsoleState>,
-    all_entities: Query<(Entity, Option<&Name>)>,
-    player_query: Query<Entity, With<crate::components::Player>>,
-    camera_query: Query<Entity, With<crate::components::ThirdPersonCamera>>,
-    motion_query: Query<Entity, With<crate::components::CharacterMotion>>,
-    animation_query: Query<Entity, With<crate::components::PlaceholderWalkAnimation>>,
-    transform_query: Query<Entity, With<Transform>>,
+    all_entities: Query<(
+        Entity,
+        Option<&Name>,
+        Has<crate::components::Player>,
+        Has<crate::components::ThirdPersonCamera>,
+        Has<crate::components::CharacterMotion>,
+        Has<crate::components::PlaceholderWalkAnimation>,
+        Has<Transform>,
+    )>,
 ) {
     if !console.show_entity_viewer {
         return;
@@ -557,33 +614,43 @@ fn draw_entity_viewer(
             );
             ui.separator();
 
-            let filter = console.entity_filter.to_lowercase();
+            let filter_lower = console.entity_filter.to_lowercase();
+            let filter_empty = filter_lower.is_empty();
             let mut entities: Vec<_> = all_entities.iter().collect();
-            entities.sort_by_key(|(e, _)| e.index());
+            entities.sort_by_key(|(e, _, _, _, _, _, _)| e.index());
 
             egui::ScrollArea::vertical().show(ui, |ui| {
-                for (entity, name) in entities {
+                for (
+                    entity,
+                    name,
+                    has_player,
+                    has_camera,
+                    has_motion,
+                    has_animation,
+                    has_transform,
+                ) in entities
+                {
                     let name_str = name.map(|n| n.as_str()).unwrap_or("<未命名>");
                     let id_str = format!("{}: {}", entity.index(), name_str);
 
-                    if !filter.is_empty() && !id_str.to_lowercase().contains(&filter) {
+                    if !filter_empty && !id_str.to_lowercase().contains(&filter_lower) {
                         continue;
                     }
 
                     let mut components = Vec::new();
-                    if player_query.get(entity).is_ok() {
+                    if has_player {
                         components.push("Player");
                     }
-                    if camera_query.get(entity).is_ok() {
+                    if has_camera {
                         components.push("ThirdPersonCamera");
                     }
-                    if motion_query.get(entity).is_ok() {
+                    if has_motion {
                         components.push("CharacterMotion");
                     }
-                    if animation_query.get(entity).is_ok() {
+                    if has_animation {
                         components.push("PlaceholderWalkAnimation");
                     }
-                    if transform_query.get(entity).is_ok() {
+                    if has_transform {
                         components.push("Transform");
                     }
 
@@ -723,25 +790,50 @@ fn draw_performance_monitor(mut contexts: EguiContexts, perf_monitor: Res<Perfor
         .show(ctx, |ui| {
             ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
 
+            const FRAME_BUDGET_MS: f32 = 16.67;
             let fps_text_color = fps_color(perf_monitor.current_fps);
-            ui.label(
-                egui::RichText::new(format!("FPS: {:.1}", perf_monitor.current_fps))
-                    .size(14.0)
-                    .strong()
-                    .color(fps_text_color),
-            );
+            let budget_exceeded = perf_monitor.frame_time_ms > FRAME_BUDGET_MS;
+
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new(format!("FPS: {:.1}", perf_monitor.current_fps))
+                        .size(14.0)
+                        .strong()
+                        .color(fps_text_color),
+                );
+                if budget_exceeded {
+                    ui.label(
+                        egui::RichText::new("⚠ 超预算")
+                            .size(11.0)
+                            .color(egui::Color32::from_rgb(255, 90, 90)),
+                    );
+                }
+            });
             ui.label(
                 egui::RichText::new(format!("平均FPS: {:.1}", perf_monitor.avg_fps))
                     .size(12.0)
                     .color(egui::Color32::from_gray(180)),
             );
+            let frame_time_color = if budget_exceeded {
+                egui::Color32::from_rgb(255, 90, 90)
+            } else {
+                egui::Color32::from_gray(180)
+            };
             ui.label(
-                egui::RichText::new(format!("帧时间: {:.2}ms", perf_monitor.frame_time_ms))
+                egui::RichText::new(format!(
+                    "帧时间: {:.2}ms / {:.2}ms",
+                    perf_monitor.frame_time_ms, FRAME_BUDGET_MS
+                ))
+                .size(12.0)
+                .color(frame_time_color),
+            );
+            ui.label(
+                egui::RichText::new(format!("实体数: {}", perf_monitor.entity_count))
                     .size(12.0)
                     .color(egui::Color32::from_gray(180)),
             );
             ui.label(
-                egui::RichText::new(format!("实体数: {}", perf_monitor.entity_count))
+                egui::RichText::new(format!("Lua 内存: {:.1} KB", perf_monitor.lua_memory_kb))
                     .size(12.0)
                     .color(egui::Color32::from_gray(180)),
             );
@@ -869,6 +961,8 @@ fn update_performance_data(
     mut perf_monitor: ResMut<PerformanceMonitor>,
     time: Res<Time>,
     query: Query<Entity>,
+    lua: Res<crate::lua_api::LuaRuntime>,
+    mut frame_counter: Local<u8>,
 ) {
     let delta = time.delta_secs();
     if delta > 0.0 {
@@ -876,22 +970,27 @@ fn update_performance_data(
         perf_monitor.current_fps = fps;
         perf_monitor.frame_time_ms = delta * 1000.0;
 
-        perf_monitor.fps_history.push_back(fps);
-        if perf_monitor.fps_history.len() > perf_monitor.max_history {
+        if perf_monitor.fps_history.len() >= perf_monitor.max_history {
             perf_monitor.fps_history.pop_front();
         }
+        perf_monitor.fps_history.push_back(fps);
 
         let frame_time_ms = perf_monitor.frame_time_ms;
-        perf_monitor.frame_time_history.push_back(frame_time_ms);
-        if perf_monitor.frame_time_history.len() > perf_monitor.max_history {
+        if perf_monitor.frame_time_history.len() >= perf_monitor.max_history {
             perf_monitor.frame_time_history.pop_front();
         }
+        perf_monitor.frame_time_history.push_back(frame_time_ms);
 
         let sum: f32 = perf_monitor.fps_history.iter().sum();
         perf_monitor.avg_fps = sum / perf_monitor.fps_history.len().max(1) as f32;
     }
 
     perf_monitor.entity_count = query.iter().count();
+
+    *frame_counter = frame_counter.wrapping_add(1);
+    if frame_counter.is_multiple_of(30) {
+        perf_monitor.lua_memory_kb = lua.used_memory_kb();
+    }
 }
 
 impl DebugConsoleState {
@@ -933,12 +1032,16 @@ impl ConsoleLogLayer {
     }
 }
 
-/// 接收日志系统：将 tracing 日志转发到 DebugConsoleState
+const MAX_LOGS_PER_FRAME: usize = 32;
+
 fn receive_logs(mut console: ResMut<DebugConsoleState>) {
     if let Some(receiver) = LOG_RECEIVER.get() {
         let rx = receiver.lock().unwrap();
-        while let Ok(entry) = rx.try_recv() {
-            console.add_log(entry.level, entry.message);
+        for _ in 0..MAX_LOGS_PER_FRAME {
+            match rx.try_recv() {
+                Ok(entry) => console.add_log(entry.level, entry.message),
+                Err(_) => break,
+            }
         }
     }
 }

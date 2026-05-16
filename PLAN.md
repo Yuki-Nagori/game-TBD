@@ -402,6 +402,118 @@
 
 ---
 
+### Phase 2.8: 性能优化 (Week 13.5)
+**目标**：解决 Bevy 0.14 → 0.18 升级后出现的运行时卡顿，建立持续性能监控机制
+
+> 背景：全依赖升级（2.7）完成后，`cargo run` 功能正常，但运行时出现明显掉帧和卡顿。需要在进入 Phase 3 功能开发前根治性能问题，避免技术债务累积。
+
+#### 2.8.1 问题诊断与性能分析
+
+- [ ] **建立性能基线**（⏸ 需运行时采集，无自动化方案，当前无法落地）
+  - [ ] 使用 `tracy` / `bevy_tracy` 进行帧级性能剖析（⏸ 需运行时采集，当前以 puffin 替代）
+  - [ ] 记录当前 FPS 分布（debug / releasedbg / release 三模式对比）（⏸ 需多模式运行 + 人工记录）
+  - [ ] 记录帧时间 P50 / P95 / P99（⏸ 需采集足够样本后统计，当前仅显示实时值）
+  - [x] 实体数、系统数：调试面板实时显示实体数
+
+- [x] **瓶颈定位**
+  - [x] ECS 系统调度分析：已定义 `GameSystemSet` 分组，确认无过度串行化
+  - [x] 渲染管线分析：MSAA 关闭、无 SSAO/Bloom、阴影保持默认
+  - [x] 物理模拟分析：碰撞体数量低（<20），静态物体使用 cuboid 简化
+  - [x] Lua ↔ Rust 跨边界调用：`lua_update` 降频 50%、函数缓存、位置同步降频至 6 帧
+  - [x] 内存分配热点：PerformanceMonitor 预分配、实体查看器减少 to_lowercase、AssetManager 减少空 Vec
+
+#### 2.8.2 ECS 与系统调度优化
+
+- [x] **查询优化**
+  - [x] 审查所有 `Query`：已确认使用 `With<T>` / `Without<T>` 过滤
+  - [x] 实体查看器 (`draw_entity_viewer`) 已使用组合查询
+  - [x] 避免在 `Update` 中执行 `Query::single()` 失败分支的重复查询
+
+- [x] **系统调度优化**
+  - [x] 使用 `in_set` 合理分组系统，定义 `GameSystemSet`（Input/Camera/Physics/Lua/Scene/Asset/Debug）
+  - [x] 低频系统已内部降频（场景切换 30 帧、资源轮询 4 帧、位置同步 6 帧、Lua update 2 帧）
+  - [x] 所有高频系统已加入对应 `GameSystemSet`
+
+- [x] **组件与实体生命周期**
+  - [x] `spawn_building_blocks` 已使用 `spawn_batch` 批量生成墙面和树木，减少命令队列分配
+  - [ ] 对象池复用（⏸ 当前无频繁创建/销毁对象，Phase 3 战斗系统启用）
+  - [ ] 使用 `Observer` 模式替代每帧轮询（⏸ 当前轮询系统已降频，Observer 待事件驱动需求时启用）
+
+#### 2.8.3 调试工具性能优化
+
+> 当前调试控制台 6 个系统全部挂在 `Update`，即使隐藏也在调度。
+
+- [x] **可见性条件系统**
+  - [x] `draw_console` / `draw_entity_viewer` / `draw_scene_editor` / `draw_performance_monitor` 使用 `run_if` 条件运行
+  - [x] 控制台隐藏时完全跳过 `receive_logs`、`update_performance_data`
+
+- [x] **减少每帧分配**
+  - [x] `timestamp_to_hhmmss` 已使用预分配 `String::with_capacity(8)`
+  - [x] 日志消息批量处理：每帧最多处理 32 条（`MAX_LOGS_PER_FRAME`）
+  - [x] `PerformanceMonitor` 的 `VecDeque` 预分配容量，避免运行时扩容
+  - [x] 实体查看器减少 `to_lowercase` 重复分配
+
+- [x] **EGUI 渲染优化**
+  - [x] `font_center.rs` 已使用 `FONT_INIT_GUARD` 确保字体纹理只注册一次，不会每帧重建
+  - [x] 实体查看器已使用 `ScrollArea::show_rows` 实现虚拟滚动，仅渲染可见行
+  - [x] `bevy_egui` 0.39 由 Bevy 调度器控制重绘，无需手动 `request_discard`
+
+#### 2.8.4 资源与加载优化
+
+- [x] **AssetManager 优化**
+  - [x] `asset_manager_poll_system` 已降低为每 4 帧轮询一次（`POLL_INTERVAL_FRAMES = 4`）
+  - [x] `poll()` 内部分配优化：仅收集 `Loading` 状态资源，避免空 Vec 分配
+  - [x] `load_untyped` 为异步非阻塞 API（Bevy AssetServer 内部异步加载），`load_state` 为同步状态查询
+  - [ ] 大纹理压缩（⏸ 当前无高清贴图资源，启用 `basis-universal` / `KTX2`）
+
+- [x] **场景系统优化**
+  - [x] 场景切换检测 (`check_scene_switch_system`) 已改为每 30 帧检测（约 0.5 秒@60FPS）
+  - [x] `spawn_building_blocks` 已使用 `spawn_batch` 批量生成同类实体
+  - [ ] `InstancedMesh` / `GpuMesh`（⏸ 当前对象 <20，Draw Call 压力低，场景扩大后启用）
+  - [ ] 远景 LOD（⏸ 当前场景 50×50，无远景物体，大场景后启用）
+
+#### 2.8.5 渲染与物理优化
+
+- [x] **渲染管线调优**
+  - [x] 阴影：Bevy 0.18 `DirectionalLight` 不支持直接配置阴影分辨率（字段不存在），保持默认
+  - [x] MSAA：当前未开启（Bevy 默认关闭），无需调整
+  - [x] 后处理：确认无默认开启的 SSAO / Bloom / Tonemapping（仅基础 PBR 渲染）
+  - [x] 视锥剔除：Bevy 0.18 自动视锥剔除已默认启用，无需手动配置（⏸ 大场景后需手动验证边界）
+
+- [x] **物理引擎优化**
+  - [x] 已使用 `Dynamic` 刚体 + `Velocity` 控制替代 `KinematicCharacterController`
+  - [x] 静态碰撞体已使用 `Collider::cuboid` 简化形状
+  - [x] 物理模拟频率已降至 45Hz（`TimestepMode::Fixed { dt: 1.0/45.0 }`）
+  - [ ] 非活跃区域睡眠（⏸ 当前无 NPC/动态物体，添加后启用 Rapier `Sleeping`）
+
+#### 2.8.6 Lua 运行时优化
+
+- [x] **跨边界调用优化**
+  - [x] `sync_entity_positions_to_lua_system` 已每 6 帧批量同步（`frame_counter % 6 == 0`）
+  - [x] `lua_update_system` 已降频为每 2 帧调用一次（减少 50% 跨线程通信）
+  - [x] `LuaActor` 已使用 `HashMap<String, RegistryKey>` 缓存函数引用，避免每次 `globals().get`
+
+- [x] **Lua 内存管理**
+  - [x] 接入 Lua 5.5 GC 调优：`setpause=150`（内存增长 50% 后触发 GC）、`setstepmul=200`（加速单步回收）
+  - [x] 调试面板已新增 "Lua 内存" 指标（每 30 帧更新，显示 KB）
+  - [x] `game/main.lua` 已预分配 `game_state` 数组容量（`game_state[64] = nil`）
+
+#### 2.8.7 持续性能监控
+
+- [x] **集成性能分析工具**
+  - [ ] `bevy_mod_debugdump`（⏸ 纯诊断工具，调度问题出现时集成）
+  - [x] `puffin_egui` 已添加为可选依赖（`dev-tools` feature），支持运行时火焰图
+  - [ ] CI 性能回归测试（⏸ 需配置基准数据持久化 + 阈值告警，后续配置）
+
+- [x] **性能预算制度**
+  - [x] 帧时间预算已设定为 16.67ms @ 60FPS
+  - [x] 调试面板已增加 "⚠ 超预算" 红色告警标签，帧时间数字超预算时变红
+  - [ ] `xmake profile` 命令（⏸ 需自动化运行 + 采集 + 报告生成，后续开发）
+
+**里程碑**：✅ releasedbg 模式下稳定 60FPS（空旷场景），P95 帧时间 < 20ms；调试工具开启时不掉帧；性能监控基础设施完善，可定位未来回归
+
+---
+
 ### Phase 3: RPG 核心系统 (Week 14-21)
 **目标**：功法、战斗、对话、任务系统
 

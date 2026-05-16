@@ -49,11 +49,11 @@ impl Plugin for CameraPlugin {
             .add_systems(
                 Update,
                 (
-                    toggle_mouse_lock_system,
-                    camera_mouse_follow_system,
-                    camera_zoom_system,
-                    camera_follow_system,
-                    check_mouse_lock_status_system,
+                    toggle_mouse_lock_system.in_set(super::GameSystemSet::Camera),
+                    camera_mouse_follow_system.in_set(super::GameSystemSet::Camera),
+                    camera_zoom_system.in_set(super::GameSystemSet::Camera),
+                    camera_follow_system.in_set(super::GameSystemSet::Camera),
+                    check_mouse_lock_status_system.in_set(super::GameSystemSet::Camera),
                 ),
             );
     }
@@ -113,8 +113,7 @@ fn setup_mouse(mut cursor_query: Query<&mut CursorOptions, With<PrimaryWindow>>)
 
 /// 鼠标状态检查系统
 ///
-/// 定期检查鼠标锁定状态，确保游戏始终知道当前状态
-/// 处理边界情况：窗口失去焦点后重新获得焦点时恢复锁定
+/// 定期检查鼠标锁定状态，仅在状态变化时更新，避免每帧日志输出
 fn check_mouse_lock_status_system(
     cursor_query: Query<&CursorOptions, With<PrimaryWindow>>,
     mut camera_state: ResMut<CameraState>,
@@ -125,14 +124,9 @@ fn check_mouse_lock_status_system(
 
     let is_actually_locked = cursor.grab_mode == CursorGrabMode::Locked;
 
-    // 如果实际状态与记录状态不一致，更新记录
+    // 仅在状态变化时更新，避免每帧重复日志
     if is_actually_locked != camera_state.mouse_locked {
         camera_state.mouse_locked = is_actually_locked;
-        if is_actually_locked {
-            info!("鼠标锁定状态：已锁定");
-        } else {
-            info!("鼠标锁定状态：已释放");
-        }
     }
 }
 

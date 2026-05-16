@@ -55,7 +55,6 @@ impl From<ColorRgb> for Color {
 
 /// 场景对象配置
 #[derive(Debug, Clone, serde::Deserialize)]
-#[allow(dead_code)]
 pub struct SceneObjectConfig {
     /// 对象类型（如 "building", "tree"）
     pub r#type: String,
@@ -69,7 +68,6 @@ pub struct SceneObjectConfig {
 
 /// 场景连接配置
 #[derive(Debug, Clone, serde::Deserialize)]
-#[allow(dead_code)]
 pub struct SceneConnectionConfig {
     /// 目标场景 ID
     pub to: String,
@@ -83,7 +81,6 @@ pub struct SceneConnectionConfig {
 
 /// 单个场景配置
 #[derive(Debug, Clone, serde::Deserialize)]
-#[allow(dead_code)]
 pub struct SceneConfig {
     /// 场景名称
     pub name: String,
@@ -182,7 +179,10 @@ impl Plugin for ScenePlugin {
             .init_resource::<CurrentScene>()
             .init_resource::<SceneColorRes>()
             .add_systems(Startup, (load_scene_config, spawn_scene).chain())
-            .add_systems(Update, check_scene_switch_system);
+            .add_systems(
+                Update,
+                check_scene_switch_system.in_set(super::GameSystemSet::Scene),
+            );
     }
 }
 
@@ -303,20 +303,22 @@ fn spawn_scene(
 fn check_scene_switch_system(
     player_query: Query<&Transform, With<Player>>,
     current_scene: Res<CurrentScene>,
+    mut frame_counter: Local<u8>,
 ) {
+    *frame_counter = frame_counter.wrapping_add(1);
+    if !frame_counter.is_multiple_of(30) {
+        return;
+    }
+
     let Ok(player_transform) = player_query.single() else {
         return;
     };
 
     let player_pos = player_transform.translation;
 
-    // 检查是否接近场景切换点
     for connection in &current_scene.config.connections {
-        let distance = Vec2::new(player_pos.x - connection.x, player_pos.z - connection.z).length();
-
-        // TODO: 显示 UI 提示，允许玩家按键切换场景
-        // 避免每帧记录日志造成性能问题
-        let _ = distance;
+        let _distance =
+            Vec2::new(player_pos.x - connection.x, player_pos.z - connection.z).length();
     }
 }
 
@@ -335,21 +337,25 @@ fn spawn_building_blocks(
     let roof_mesh = meshes.add(Cuboid::new(ROOF_SIZE, ROOF_SIZE / 2.0, ROOF_SIZE));
     let tree_mesh = meshes.add(Cuboid::new(TREE_SIZE, TREE_SIZE * 2.0, TREE_SIZE));
 
-    // 墙面
-    let wall_positions = [
-        Vec3::new(8.0, WALL_SIZE / 2.0, 0.0),
-        Vec3::new(-8.0, WALL_SIZE / 2.0, 0.0),
-        Vec3::new(0.0, WALL_SIZE / 2.0, 8.0),
-        Vec3::new(0.0, WALL_SIZE / 2.0, -8.0),
-    ];
-    for pos in wall_positions {
-        commands.spawn((
-            Mesh3d(wall_mesh.clone()),
-            MeshMaterial3d(materials.add(wall_color)),
-            Transform::from_translation(pos),
-            Collider::cuboid(WALL_SIZE / 2.0, WALL_SIZE / 2.0, WALL_SIZE / 2.0),
-        ));
-    }
+    // 墙面：批量生成，减少命令队列分配
+    let wall_material = materials.add(wall_color);
+    commands.spawn_batch(
+        [
+            Vec3::new(8.0, WALL_SIZE / 2.0, 0.0),
+            Vec3::new(-8.0, WALL_SIZE / 2.0, 0.0),
+            Vec3::new(0.0, WALL_SIZE / 2.0, 8.0),
+            Vec3::new(0.0, WALL_SIZE / 2.0, -8.0),
+        ]
+        .into_iter()
+        .map(move |pos| {
+            (
+                Mesh3d(wall_mesh.clone()),
+                MeshMaterial3d(wall_material.clone()),
+                Transform::from_translation(pos),
+                Collider::cuboid(WALL_SIZE / 2.0, WALL_SIZE / 2.0, WALL_SIZE / 2.0),
+            )
+        }),
+    );
 
     // 屋顶
     commands.spawn((
@@ -359,20 +365,24 @@ fn spawn_building_blocks(
         Collider::cuboid(ROOF_SIZE / 2.0, ROOF_SIZE / 4.0, ROOF_SIZE / 2.0),
     ));
 
-    // 树木
-    let tree_positions = [
-        Vec3::new(5.0, TREE_SIZE, 5.0),
-        Vec3::new(-5.0, TREE_SIZE, -5.0),
-        Vec3::new(5.0, TREE_SIZE, -5.0),
-    ];
-    for pos in tree_positions {
-        commands.spawn((
-            Mesh3d(tree_mesh.clone()),
-            MeshMaterial3d(materials.add(tree_color)),
-            Transform::from_translation(pos),
-            Collider::cuboid(TREE_SIZE / 2.0, TREE_SIZE, TREE_SIZE / 2.0),
-        ));
-    }
+    // 树木：批量生成
+    let tree_material = materials.add(tree_color);
+    commands.spawn_batch(
+        [
+            Vec3::new(5.0, TREE_SIZE, 5.0),
+            Vec3::new(-5.0, TREE_SIZE, -5.0),
+            Vec3::new(5.0, TREE_SIZE, -5.0),
+        ]
+        .into_iter()
+        .map(move |pos| {
+            (
+                Mesh3d(tree_mesh.clone()),
+                MeshMaterial3d(tree_material.clone()),
+                Transform::from_translation(pos),
+                Collider::cuboid(TREE_SIZE / 2.0, TREE_SIZE, TREE_SIZE / 2.0),
+            )
+        }),
+    );
 }
 
 /// 生成单个场景对象（供编辑器使用）

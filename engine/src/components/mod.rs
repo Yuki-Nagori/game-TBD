@@ -23,7 +23,6 @@ pub struct CharacterMotion {
 
 /// 行走动画占位组件（后续替换为真实动画系统）
 #[derive(Component)]
-#[allow(dead_code)]
 pub struct PlaceholderWalkAnimation {
     /// 基础高度
     pub base_height: f32,

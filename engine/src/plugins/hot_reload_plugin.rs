@@ -9,8 +9,6 @@ use std::time::Duration;
 
 #[cfg(feature = "hot-reload")]
 use crate::lua_api::LuaRuntime;
-#[cfg(feature = "hot-reload")]
-use crate::resources::EntityRegistry;
 
 /// 热重载事件
 #[derive(Message)]
@@ -230,7 +228,6 @@ fn handle_hot_reload(
     lua: Res<LuaRuntime>,
     mut asset_manager: ResMut<crate::asset_manager::AssetManager>,
     asset_server: Res<AssetServer>,
-    _entity_registry: ResMut<EntityRegistry>,
 ) {
     for event in events.read() {
         match event {

@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tracing::{Level, Subscriber};
 use tracing_subscriber::{
-    fmt::{self, format::Writer, time::FormatTime},
+    fmt,
     layer::SubscriberExt,
     registry::LookupSpan,
     EnvFilter, Layer,
@@ -291,17 +291,5 @@ impl LogBuffer {
 
     pub fn clear(&mut self) {
         self.entries.clear();
-    }
-}
-
-/// 自定义时间格式化
-pub struct GameTimeFormatter;
-
-impl FormatTime for GameTimeFormatter {
-    fn format_time(&self, w: &mut Writer<'_>) -> std::fmt::Result {
-        use std::time::SystemTime;
-        let now = SystemTime::now();
-        let datetime = chrono::DateTime::<chrono::Local>::from(now);
-        write!(w, "{}", datetime.format("%Y-%m-%d %H:%M:%S%.3f"))
     }
 }

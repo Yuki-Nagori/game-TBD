@@ -60,7 +60,6 @@ impl Default for PlayerMovementConfig {
 
 /// 行走动画配置（从 Lua 读取）
 #[derive(Debug, Clone, serde::Deserialize)]
-#[allow(dead_code)]
 pub struct WalkAnimationConfig {
     /// 行走振幅
     #[serde(rename = "bob_amplitude")]
@@ -105,9 +104,9 @@ impl Plugin for PlayerPlugin {
             .add_systems(
                 Update,
                 (
-                    player_input_system,
-                    invalidate_camera_cache_system,
-                    player_animation_system,
+                    player_input_system.in_set(super::GameSystemSet::Input),
+                    invalidate_camera_cache_system.in_set(super::GameSystemSet::Input),
+                    player_animation_system.in_set(super::GameSystemSet::Input),
                 ),
             );
     }

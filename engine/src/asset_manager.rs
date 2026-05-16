@@ -70,6 +70,7 @@ pub struct AssetManager {
     cache_misses: u64,
     /// Bevy 资源句柄（用于查询加载状态）
     handles: HashMap<String, UntypedHandle>,
+    poll_frame_counter: u8,
 }
 
 impl Default for AssetManager {
@@ -89,6 +90,7 @@ impl AssetManager {
             cache_hits: 0,
             cache_misses: 0,
             handles: HashMap::new(),
+            poll_frame_counter: 0,
         }
     }
 
@@ -117,16 +119,21 @@ impl AssetManager {
 
     /// 轮询所有资源的状态
     pub fn poll(&mut self, asset_server: &AssetServer) {
-        let paths: Vec<String> = self.states.keys().cloned().collect();
+        // 只在有 Loading 状态资源时收集路径，避免空 Vec 分配
+        let paths: Vec<String> = self
+            .states
+            .iter()
+            .filter(|(_, s)| matches!(s, AssetLoadState::Loading { .. }))
+            .map(|(k, _)| k.clone())
+            .collect();
+
         for path in paths {
-            let handle_id = if let Some(state) = self.states.get(&path) {
-                match state {
-                    AssetLoadState::Loading { handle_id, .. } => *handle_id,
-                    _ => continue,
-                }
-            } else {
-                continue;
-            };
+            let handle_id =
+                if let Some(AssetLoadState::Loading { handle_id, .. }) = self.states.get(&path) {
+                    *handle_id
+                } else {
+                    continue;
+                };
 
             // 使用加载时存储的句柄查询加载状态
             let Some(handle) = self.handles.get(&path) else {
@@ -236,11 +243,20 @@ impl AssetManager {
     }
 }
 
-/// 资源管理器轮询系统
+const POLL_INTERVAL_FRAMES: u8 = 4;
+
+/// 资源管理器轮询系统（每 4 帧检查一次待加载资源）
 pub fn asset_manager_poll_system(
     mut asset_manager: ResMut<AssetManager>,
     asset_server: Res<AssetServer>,
 ) {
+    asset_manager.poll_frame_counter = asset_manager.poll_frame_counter.wrapping_add(1);
+    if !asset_manager
+        .poll_frame_counter
+        .is_multiple_of(POLL_INTERVAL_FRAMES)
+    {
+        return;
+    }
     if asset_manager.pending_count > 0 {
         asset_manager.poll(&asset_server);
     }

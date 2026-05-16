@@ -45,6 +45,9 @@ enum LuaRequest {
         code: String,
         respond_to: Sender<Result<String, String>>,
     },
+    GetMemory {
+        respond_to: Sender<f64>,
+    },
 }
 
 /// Lua Actor 句柄
@@ -54,10 +57,6 @@ enum LuaRequest {
 #[derive(Clone, Resource)]
 pub struct LuaRuntime {
     sender: Sender<LuaRequest>,
-    // 这些字段用于传递给 Actor 线程，通过 Clone 保持引用
-    #[allow(dead_code)]
-    command_queue: Arc<Mutex<Vec<LuaCommand>>>,
-    #[allow(dead_code)]
     positions: Arc<Mutex<HashMap<String, [f32; 3]>>>,
 }
 
@@ -83,11 +82,7 @@ impl LuaRuntime {
             actor.run(receiver);
         });
 
-        Ok(Self {
-            sender,
-            command_queue,
-            positions,
-        })
+        Ok(Self { sender, positions })
     }
 
     /// 加载并执行 Lua 脚本
@@ -205,6 +200,19 @@ impl LuaRuntime {
             .map_err(|e| anyhow::anyhow!("接收响应失败: {}", e))?
             .map_err(|e: String| anyhow::anyhow!("Lua 执行失败: {}", e))
     }
+
+    /// 获取 Lua 运行时内存使用量（KB）
+    pub fn used_memory_kb(&self) -> f64 {
+        let (tx, rx) = channel();
+        if self
+            .sender
+            .send(LuaRequest::GetMemory { respond_to: tx })
+            .is_err()
+        {
+            return 0.0;
+        }
+        rx.recv().unwrap_or(0.0)
+    }
 }
 
 /// 内部 Lua Actor
@@ -213,9 +221,8 @@ impl LuaRuntime {
 struct LuaActor {
     lua: Lua,
     command_queue: Arc<Mutex<Vec<LuaCommand>>>,
-    // 共享的位置状态，Lua 代码可以通过 API 读取
-    #[allow(dead_code)]
-    positions: Arc<Mutex<HashMap<String, [f32; 3]>>>,
+    /// 缓存已获取的 Lua 函数，避免每次 `globals().get` 开销
+    function_cache: HashMap<String, mlua::RegistryKey>,
 }
 
 impl LuaActor {
@@ -225,12 +232,23 @@ impl LuaActor {
     ) -> anyhow::Result<Self> {
         let lua = Lua::new();
 
+        // Lua 5.5 GC 调优：降低 GC 频率，减少运行时停顿
+        // setpause=150: 内存增长 50% 后才触发新一轮 GC
+        // setstepmul=200: 每步回收速度加倍，单次 GC 步长更短
+        lua.load(r"collectgarbage('setpause', 150); collectgarbage('setstepmul', 200)")
+            .exec()
+            .ok();
+
         // 注册核心 API
         Self::register_core_api(&lua).map_err(|e| anyhow::anyhow!("注册核心 API 失败: {}", e))?;
         Self::register_mod_api(&lua, Arc::clone(&command_queue), Arc::clone(&positions))
             .map_err(|e| anyhow::anyhow!("注册 Mod API 失败: {}", e))?;
 
-        Ok(Self { lua, command_queue, positions })
+        Ok(Self {
+            lua,
+            command_queue,
+            function_cache: HashMap::new(),
+        })
     }
 
     fn run(&mut self, receiver: Receiver<LuaRequest>) {
@@ -241,7 +259,7 @@ impl LuaActor {
                     let _ = respond_to.send(result);
                 }
                 LuaRequest::CallFunction { name, args, respond_to } => {
-                    let result = self.call_function(&name, &args);
+                    let result = self.call_function_cached(&name, &args);
                     let _ = respond_to.send(result);
                 }
                 LuaRequest::GetConfig { table_name, respond_to } => {
@@ -263,6 +281,10 @@ impl LuaActor {
                 LuaRequest::ExecuteWithReturn { code, respond_to } => {
                     let result = self.execute_code_with_return(&code);
                     let _ = respond_to.send(result);
+                }
+                LuaRequest::GetMemory { respond_to } => {
+                    let kb = self.lua.used_memory() as f64 / 1024.0;
+                    let _ = respond_to.send(kb);
                 }
             }
         }
@@ -306,23 +328,31 @@ impl LuaActor {
         Ok(())
     }
 
-    fn call_function(&self, name: &str, args_bytes: &[u8]) -> Result<Vec<u8>, String> {
-        // 反序列化参数为 f32（目前只支持单个 f32 参数）
+    fn call_function_cached(&mut self, name: &str, args_bytes: &[u8]) -> Result<Vec<u8>, String> {
         let arg: f32 = rkyv::from_bytes::<f32, rkyv::rancor::Error>(args_bytes)
             .map_err(|e| format!("反序列化参数失败: {}", e))?;
 
-        let function: mlua::Function = self
-            .lua
-            .globals()
-            .get(name)
-            .map_err(|e| format!("获取 Lua 函数 {} 失败: {}", name, e))?;
+        // 尝试从缓存获取函数，否则查全局表并缓存到注册表
+        let function: mlua::Function = if let Some(key) = self.function_cache.get(name) {
+            self.lua
+                .registry_value(key)
+                .map_err(|e| format!("从注册表获取函数 {} 失败: {}", name, e))?
+        } else {
+            let func: mlua::Function = self
+                .lua
+                .globals()
+                .get(name)
+                .map_err(|e| format!("获取 Lua 函数 {} 失败: {}", name, e))?;
+            if let Ok(key) = self.lua.create_registry_value(&func) {
+                self.function_cache.insert(name.to_string(), key);
+            }
+            func
+        };
 
-        // 调用 Lua 函数
         let _: () = function
             .call(arg)
             .map_err(|e| format!("调用 Lua 函数 {} 失败: {}", name, e))?;
 
-        // 返回空结果
         rkyv::to_bytes::<rkyv::rancor::Error>(&())
             .map_err(|e| format!("序列化结果失败: {}", e))
             .map(|b| b.to_vec())

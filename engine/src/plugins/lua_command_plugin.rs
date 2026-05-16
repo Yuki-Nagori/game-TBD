@@ -23,10 +23,10 @@ impl Plugin for LuaCommandPlugin {
             .add_systems(
                 Update,
                 (
-                    lua_update_system,
-                    apply_lua_commands_system,
-                    sync_entity_positions_to_lua_system,
-                    hot_reload_lua_script_system,
+                    lua_update_system.in_set(super::GameSystemSet::Lua),
+                    apply_lua_commands_system.in_set(super::GameSystemSet::Lua),
+                    sync_entity_positions_to_lua_system.in_set(super::GameSystemSet::Lua),
+                    hot_reload_lua_script_system.in_set(super::GameSystemSet::Lua),
                 )
                     .chain(),
             );
@@ -34,9 +34,14 @@ impl Plugin for LuaCommandPlugin {
 }
 
 /// Lua update 系统
-/// 每帧调用 Lua 的 update 函数
-fn lua_update_system(lua: Res<LuaRuntime>, time: Res<Time>) {
+/// 每 2 帧调用一次 Lua 的 update 函数，减少跨线程通信开销
+fn lua_update_system(lua: Res<LuaRuntime>, time: Res<Time>, mut frame_counter: Local<u8>) {
     use tracing::error;
+
+    *frame_counter = frame_counter.wrapping_add(1);
+    if !frame_counter.is_multiple_of(2) {
+        return;
+    }
 
     if let Err(err) = lua.call_function("update", time.delta_secs()) {
         error!("Lua update 调用失败: {}", err);
@@ -116,13 +121,16 @@ fn apply_lua_commands_system(
     }
 }
 
-/// 同步实体位置到 Lua
-/// 将游戏中所有实体位置同步给 Lua
 fn sync_entity_positions_to_lua_system(
     lua: Res<LuaRuntime>,
     registry: Res<EntityRegistry>,
     query: Query<&Transform>,
+    mut frame_counter: Local<u8>,
 ) {
+    *frame_counter = frame_counter.wrapping_add(1);
+    if !frame_counter.is_multiple_of(6) {
+        return;
+    }
     for (id, entity) in &registry.by_id {
         if let Ok(transform) = query.get(*entity) {
             lua.update_entity_position(id, transform.translation);

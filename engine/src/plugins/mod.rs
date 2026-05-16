@@ -26,13 +26,52 @@ use scene_plugin::ScenePlugin;
 #[cfg(feature = "hot-reload")]
 use debug_console_plugin::DebugConsolePlugin;
 
+/// 游戏系统集合
+///
+/// 按功能分组系统，明确调度边界，便于插件插入和性能分析。
+/// 同一集合内的系统仍由 Bevy 调度器自动并行化（无数据依赖时）。
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum GameSystemSet {
+    /// 玩家输入处理（WASD、鼠标事件）
+    Input,
+    /// 相机控制（跟随、旋转、缩放）
+    Camera,
+    /// 物理模拟
+    Physics,
+    /// Lua 脚本与命令处理
+    Lua,
+    /// 场景管理（切换检测、对象生成）
+    Scene,
+    /// 资源加载与缓存
+    Asset,
+    /// 调试工具（控制台、性能监控、热重载）
+    Debug,
+}
+
 /// 游戏主插件：注册所有子插件
 pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<AssetManager>()
-            .add_systems(Update, asset_manager_poll_system)
+            .add_systems(
+                Update,
+                asset_manager_poll_system.in_set(GameSystemSet::Asset),
+            )
+            .insert_resource(TimestepMode::Fixed { dt: 1.0 / 45.0, substeps: 1 })
+            .configure_sets(
+                Update,
+                (
+                    GameSystemSet::Input,
+                    GameSystemSet::Camera,
+                    GameSystemSet::Physics,
+                    GameSystemSet::Lua,
+                    GameSystemSet::Scene,
+                    GameSystemSet::Asset,
+                    GameSystemSet::Debug,
+                )
+                    .chain(),
+            )
             .add_plugins((
                 FontCenterPlugin,
                 RapierPhysicsPlugin::<NoUserData>::default(),
