@@ -116,13 +116,16 @@ fn apply_lua_commands_system(
     }
 }
 
-/// 同步实体位置到 Lua
-/// 将游戏中所有实体位置同步给 Lua
 fn sync_entity_positions_to_lua_system(
     lua: Res<LuaRuntime>,
     registry: Res<EntityRegistry>,
     query: Query<&Transform>,
+    mut frame_counter: Local<u8>,
 ) {
+    *frame_counter = frame_counter.wrapping_add(1);
+    if !frame_counter.is_multiple_of(6) {
+        return;
+    }
     for (id, entity) in &registry.by_id {
         if let Ok(transform) = query.get(*entity) {
             lua.update_entity_position(id, transform.translation);

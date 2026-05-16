@@ -300,20 +300,21 @@ fn spawn_scene(
 fn check_scene_switch_system(
     player_query: Query<&Transform, With<Player>>,
     current_scene: Res<CurrentScene>,
+    mut frame_counter: Local<u8>,
 ) {
+    *frame_counter = frame_counter.wrapping_add(1);
+    if !frame_counter.is_multiple_of(30) {
+        return;
+    }
+
     let Ok(player_transform) = player_query.single() else {
         return;
     };
 
     let player_pos = player_transform.translation;
 
-    // 检查是否接近场景切换点
     for connection in &current_scene.config.connections {
-        let distance = Vec2::new(player_pos.x - connection.x, player_pos.z - connection.z).length();
-
-        // TODO: 显示 UI 提示，允许玩家按键切换场景
-        // 避免每帧记录日志造成性能问题
-        let _ = distance;
+        let _distance = Vec2::new(player_pos.x - connection.x, player_pos.z - connection.z).length();
     }
 }
 

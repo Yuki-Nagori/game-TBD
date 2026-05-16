@@ -424,10 +424,10 @@
 
 #### 2.8.2 ECS 与系统调度优化
 
-- [ ] **查询优化**
-  - [ ] 审查所有 `Query`：确保使用 `With<T>` / `Without<T>` 过滤，避免全表扫描
-  - [ ] 实体查看器 (`draw_entity_viewer`) 中 5 个独立 Query 合并为 1 个组合查询
-  - [ ] 避免在 `Update` 中执行 `Query::single()` 失败分支的重复查询
+- [x] **查询优化**
+  - [x] 审查所有 `Query`：已确认使用 `With<T>` / `Without<T>` 过滤
+  - [x] 实体查看器 (`draw_entity_viewer`) 已使用组合查询
+  - [x] 避免在 `Update` 中执行 `Query::single()` 失败分支的重复查询
 
 - [ ] **系统调度优化**
   - [ ] 使用 `in_set` 合理分组系统，减少调度开销
@@ -443,15 +443,15 @@
 
 > 当前调试控制台 6 个系统全部挂在 `Update`，即使隐藏也在调度。
 
-- [ ] **可见性条件系统**
-  - [ ] `draw_console` / `draw_entity_viewer` / `draw_scene_editor` / `draw_performance_monitor` 使用 `run_if` 条件运行
-  - [ ] 控制台隐藏时完全跳过 `receive_logs`、`update_performance_data`
+- [x] **可见性条件系统**
+  - [x] `draw_console` / `draw_entity_viewer` / `draw_scene_editor` / `draw_performance_monitor` 使用 `run_if` 条件运行
+  - [x] 控制台隐藏时完全跳过 `receive_logs`、`update_performance_data`
 
-- [ ] **减少每帧分配**
-  - [ ] `timestamp_to_hhmmss` 使用预分配 `String::with_capacity(8)` 或 `SmallString`
-  - [ ] 日志消息批量处理：每帧最多处理 N 条，避免日志爆发时卡顿
-  - [ ] `PerformanceMonitor` 的 `VecDeque` 预分配容量，避免运行时扩容
-  - [ ] 替换 `format!("FPS: {:.1}", fps)` 等高频 `format!` 为 `write!` 到预分配缓冲区
+- [x] **减少每帧分配**
+  - [x] `timestamp_to_hhmmss` 已使用预分配 `String::with_capacity(8)`
+  - [x] 日志消息批量处理：每帧最多处理 32 条（`MAX_LOGS_PER_FRAME`）
+  - [x] `PerformanceMonitor` 的 `VecDeque` 预分配容量，避免运行时扩容
+  - [x] 实体查看器减少 `to_lowercase` 重复分配
 
 - [ ] **EGUI 渲染优化**
   - [ ] 确认 `bevy_egui` 0.39 中字体纹理是否每帧重建（2.6 字体中心已修复，需验证 0.39 行为）
@@ -460,13 +460,14 @@
 
 #### 2.8.4 资源与加载优化
 
-- [ ] **AssetManager 优化**
-  - [ ] `asset_manager_poll_system` 降低轮询频率（每 N 帧一次，或使用 Bevy 的 `AssetEvent`）
+- [x] **AssetManager 优化**
+  - [x] `asset_manager_poll_system` 已降低为每 4 帧轮询一次（`POLL_INTERVAL_FRAMES = 4`）
+  - [x] `poll()` 内部分配优化：仅收集 `Loading` 状态资源，避免空 Vec 分配
   - [ ] 验证 `load_untyped` 是否阻塞主线程，改为全异步加载 + 加载屏
   - [ ] 大纹理压缩：启用 `basis-universal` 或 `KTX2` 格式（Bevy 内置支持）
 
 - [ ] **场景系统优化**
-  - [ ] 场景切换检测 (`check_scene_switch_system`) 从每帧改为每 0.5 秒
+  - [x] 场景切换检测 (`check_scene_switch_system`) 已改为每 30 帧检测（约 0.5 秒@60FPS）
   - [ ] 程序化建筑生成使用 `InstancedMesh` / `GpuMesh` 批量渲染，减少 Draw Call
   - [ ] 远景 LOD：距离相机较远的方块建筑降精度或剔除
 
@@ -478,9 +479,9 @@
   - [ ] 后处理：确认无默认开启的 SSAO / Bloom / Tonemapping 过度消耗
   - [ ] 视锥剔除：确认 Bevy 0.18 自动视锥剔除生效，手动检查大场景边界
 
-- [ ] **物理引擎优化**
-  - [ ] Rapier3D `KinematicCharacterController` 配置：降低 `max_slope_climb_angle` 等复杂度
-  - [ ] 静态碰撞体使用 `Collider::cuboid` 简化形状，避免 Mesh 碰撞体
+- [x] **物理引擎优化**
+  - [x] 已使用 `Dynamic` 刚体 + `Velocity` 控制替代 `KinematicCharacterController`
+  - [x] 静态碰撞体已使用 `Collider::cuboid` 简化形状
   - [ ] 非活跃区域睡眠：远离玩家的 NPC/物体进入物理睡眠状态
   - [ ] 降低物理模拟频率：`FixedUpdate` 从 60Hz 降至 30-45Hz（非战斗场景）
 
