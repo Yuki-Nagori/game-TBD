@@ -65,9 +65,23 @@ Refs: #42
 
 ## 测试要求
 
-- 新功能必须包含测试
+- 新功能必须包含测试（无测试，不合并）
 - 修复Bug必须包含回归测试
 - 所有测试必须通过 `xmake check`
+- 新增代码覆盖率不得低于 70%
+- 整体行覆盖率不得低于 60%
+
+### 测试组织
+
+- **单元测试**：源码文件底部 `#[cfg(test)] mod tests`，测试单个函数/模块，可访问私有成员
+- **集成测试**：`engine/tests/*.rs`，测试跨模块公共 API 链路
+- **夹具数据**：`tests/fixtures/` 集中管理，禁止硬编码长 Lua 脚本
+
+### 测试命名
+
+格式：`test_{模块}_{场景}_{预期结果}`
+
+示例：`test_asset_manager_cache_hit_returns_same_id`、`test_lua_runtime_invalid_syntax_returns_error`
 
 ## 目录结构
 

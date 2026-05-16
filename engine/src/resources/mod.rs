@@ -67,3 +67,78 @@ impl ScriptHotReload {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_camera_state_default() {
+        let state = CameraState::default();
+        assert_eq!(state.yaw, 0.0, "默认偏航角应为 0");
+        assert_eq!(state.pitch, 20.0f32.to_radians(), "默认俯仰角应为 20 度");
+        assert_eq!(state.distance, 20.0, "默认距离应为 20");
+        assert!(
+            (state.smooth_factor - 0.1).abs() < f32::EPSILON,
+            "默认平滑因子应为 0.1"
+        );
+        assert!(state.mouse_locked, "默认应锁定鼠标");
+    }
+
+    #[test]
+    fn test_entity_registry_insert_and_query() {
+        let mut registry = EntityRegistry::default();
+        let entity = Entity::from_bits(42);
+        registry.by_id.insert("test_id".to_string(), entity);
+
+        assert_eq!(
+            registry.by_id.get("test_id"),
+            Some(&entity),
+            "应能查询到插入的实体"
+        );
+    }
+
+    #[test]
+    fn test_entity_registry_overwrite() {
+        let mut registry = EntityRegistry::default();
+        let entity1 = Entity::from_bits(1);
+        let entity2 = Entity::from_bits(2);
+
+        registry.by_id.insert("same_id".to_string(), entity1);
+        registry.by_id.insert("same_id".to_string(), entity2);
+
+        assert_eq!(
+            registry.by_id.get("same_id"),
+            Some(&entity2),
+            "覆盖后应返回新实体"
+        );
+    }
+
+    #[test]
+    fn test_entity_registry_components_store() {
+        let mut registry = EntityRegistry::default();
+        let value = serde_json::json!({"hp": 100});
+        let mut comps = HashMap::new();
+        comps.insert("Health".to_string(), value.clone());
+        registry.components.insert("entity_1".to_string(), comps);
+
+        assert_eq!(
+            registry.components.get("entity_1").unwrap().get("Health"),
+            Some(&value),
+            "应能查询到存储的组件数据"
+        );
+    }
+
+    #[test]
+    fn test_script_hot_reload_new() {
+        let hot_reload = ScriptHotReload::new("game/main.lua");
+        assert_eq!(hot_reload.script_path, "game/main.lua");
+    }
+
+    #[test]
+    fn test_entity_registry_default_empty() {
+        let registry = EntityRegistry::default();
+        assert!(registry.by_id.is_empty(), "默认实体映射应为空");
+        assert!(registry.components.is_empty(), "默认组件映射应为空");
+    }
+}

@@ -262,16 +262,24 @@ refactor/xxx -> 重构
 - 提交信息格式：`<type>: <subject>`
 - 一次提交只做一件事，禁止混合不相关改动。
 
-### 7.2 提交前检查
+### 7.2 提交前检查（执行顺序）
 
 ```bash
-xmake format      # 格式化
-xmake check       # clippy + test + luacheck
+xmake format      # 1. 先格式化（修改文件最少）
+xmake check       # 2. 再检查（clippy + test + luacheck）
+xmake build     # 3. 最后构建（可选，节约时间，CI 会跑）
 ```
 
 - **clippy 零警告** (`-D warnings`)
 - **luacheck 零警告**
 - **cargo test 全部通过**
+
+#### 工作流约束
+
+- **禁止并行编译过载**：`cargo` 已配置 `sccache` + `incremental = true`，不要额外加 `-j` 参数让 CPU 满载。
+- **分类 commit**：每完成一类工作（如"core 模块补测"）commit 一次，不要混提交。
+- **必须通过测试和格式化才 commit**：`xmake check` 全绿后再 `git commit`。
+- **`xmake build` 放最后**：开发迭代期以 `cargo test` 为主，完整构建留到阶段收尾或 CI。
 
 ### 7.3 PR 规范
 

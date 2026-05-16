@@ -381,3 +381,220 @@ impl AssetManager {
         Ok(manifest)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[test]
+    fn test_asset_manager_new() {
+        let manager = AssetManager::new();
+        assert_eq!(manager.pending_count(), 0, "新建时应无待处理资源");
+        assert_eq!(manager.progress(), (0, 0), "新建时进度应为 (0, 0)");
+        let (hits, misses) = manager.cache_stats();
+        assert_eq!(hits, 0, "新建时缓存命中应为 0");
+        assert_eq!(misses, 0, "新建时缓存未命中应为 0");
+    }
+
+    #[test]
+    fn test_asset_manager_default() {
+        let manager: AssetManager = Default::default();
+        assert_eq!(manager.pending_count(), 0);
+    }
+
+    #[test]
+    fn test_asset_manager_get_state_nonexistent() {
+        let manager = AssetManager::new();
+        assert!(
+            manager.get_state("nonexistent.png").is_none(),
+            "未加载的资源应返回 None"
+        );
+    }
+
+    #[test]
+    fn test_asset_manager_is_ready_nonexistent() {
+        let manager = AssetManager::new();
+        assert!(
+            !manager.is_ready("nonexistent.png"),
+            "未加载的资源不应为 ready"
+        );
+    }
+
+    #[test]
+    fn test_asset_manager_get_cached_nonexistent() {
+        let manager = AssetManager::new();
+        assert!(
+            manager.get_cached("nonexistent.png").is_none(),
+            "未缓存的资源应返回 None"
+        );
+    }
+
+    #[test]
+    fn test_asset_manager_invalidate_nonexistent() {
+        let mut manager = AssetManager::new();
+        manager.invalidate("nonexistent.png");
+        assert_eq!(
+            manager.pending_count(),
+            0,
+            "invalidate 不存在的资源不应 panic"
+        );
+    }
+
+    #[test]
+    fn test_asset_manager_clear_unused_older_than_empty() {
+        let mut manager = AssetManager::new();
+        manager.clear_unused_older_than(Duration::from_secs(0));
+        assert_eq!(manager.pending_count(), 0, "空缓存清理不应 panic");
+    }
+
+    #[test]
+    fn test_manifest_validate_missing_name() {
+        let manifest = AssetManifest {
+            name: "".to_string(),
+            version: "1.0.0".to_string(),
+            assets: vec![AssetEntry {
+                path: "test.png".to_string(),
+                r#type: "texture".to_string(),
+            }],
+        };
+        let result = manifest.validate();
+        assert!(
+            matches!(result, Err(ValidationError::MissingField(ref s)) if s == "name"),
+            "空 name 应返回 MissingField(name)"
+        );
+    }
+
+    #[test]
+    fn test_manifest_validate_missing_version() {
+        let manifest = AssetManifest {
+            name: "test".to_string(),
+            version: "".to_string(),
+            assets: vec![AssetEntry {
+                path: "test.png".to_string(),
+                r#type: "texture".to_string(),
+            }],
+        };
+        let result = manifest.validate();
+        assert!(
+            matches!(result, Err(ValidationError::MissingField(ref s)) if s == "version"),
+            "空 version 应返回 MissingField(version)"
+        );
+    }
+
+    #[test]
+    fn test_manifest_validate_empty_assets() {
+        let manifest = AssetManifest {
+            name: "test".to_string(),
+            version: "1.0.0".to_string(),
+            assets: vec![],
+        };
+        let result = manifest.validate();
+        assert!(
+            matches!(result, Err(ValidationError::MissingField(ref s)) if s == "assets"),
+            "空 assets 应返回 MissingField(assets)"
+        );
+    }
+
+    #[test]
+    fn test_manifest_validate_invalid_version_format() {
+        let manifest = AssetManifest {
+            name: "test".to_string(),
+            version: "noversiondot".to_string(),
+            assets: vec![AssetEntry {
+                path: "test.png".to_string(),
+                r#type: "texture".to_string(),
+            }],
+        };
+        let result = manifest.validate();
+        assert!(
+            matches!(result, Err(ValidationError::InvalidVersion(ref s)) if s == "noversiondot"),
+            "无效版本格式应返回 InvalidVersion"
+        );
+    }
+
+    #[test]
+    fn test_manifest_validate_invalid_path_traversal() {
+        let manifest = AssetManifest {
+            name: "test".to_string(),
+            version: "1.0.0".to_string(),
+            assets: vec![AssetEntry {
+                path: "../secret.png".to_string(),
+                r#type: "texture".to_string(),
+            }],
+        };
+        let result = manifest.validate();
+        assert!(
+            matches!(result, Err(ValidationError::InvalidPath(ref s)) if s == "../secret.png"),
+            "路径遍历应返回 InvalidPath"
+        );
+    }
+
+    #[test]
+    fn test_manifest_validate_unsupported_format() {
+        let manifest = AssetManifest {
+            name: "test".to_string(),
+            version: "1.0.0".to_string(),
+            assets: vec![AssetEntry {
+                path: "script.exe".to_string(),
+                r#type: "binary".to_string(),
+            }],
+        };
+        let result = manifest.validate();
+        assert!(
+            matches!(result, Err(ValidationError::UnsupportedFormat(ref s)) if s == "exe"),
+            "不支持的格式应返回 UnsupportedFormat"
+        );
+    }
+
+    #[test]
+    fn test_manifest_validate_file_not_found() {
+        let manifest = AssetManifest {
+            name: "test".to_string(),
+            version: "1.0.0".to_string(),
+            assets: vec![AssetEntry {
+                path: "nonexistent_file_that_should_not_exist_12345.png".to_string(),
+                r#type: "texture".to_string(),
+            }],
+        };
+        let result = manifest.validate();
+        assert!(
+            matches!(result, Err(ValidationError::FileNotFound(_))),
+            "不存在的文件应返回 FileNotFound"
+        );
+    }
+
+    #[test]
+    fn test_manifest_is_compatible_with_same_major() {
+        let manifest = AssetManifest {
+            name: "test".to_string(),
+            version: "1.2.3".to_string(),
+            assets: vec![],
+        };
+        assert!(manifest.is_compatible_with("1.0.0"), "主版本相同应兼容");
+        assert!(manifest.is_compatible_with("1.99.99"), "主版本相同应兼容");
+        assert!(!manifest.is_compatible_with("2.0.0"), "主版本不同不应兼容");
+        assert!(!manifest.is_compatible_with("0.1.0"), "主版本不同不应兼容");
+    }
+
+    #[test]
+    fn test_validation_error_display() {
+        let err = ValidationError::MissingField("name".to_string());
+        assert_eq!(format!("{}", err), "缺少必填字段: name");
+
+        let err = ValidationError::InvalidPath("../secret.png".to_string());
+        assert_eq!(format!("{}", err), "非法路径: ../secret.png");
+    }
+
+    #[test]
+    fn test_load_manifest_invalid_toml() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let file_path = temp_dir.path().join("bad.toml");
+        let mut file = std::fs::File::create(&file_path).unwrap();
+        file.write_all(b"not_valid_toml {{{").unwrap();
+
+        let mut manager = AssetManager::new();
+        let result = manager.load_manifest(&file_path);
+        assert!(result.is_err(), "无效 toml 应加载失败");
+    }
+}
