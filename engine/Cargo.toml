@@ -119,6 +119,18 @@ inherits = "release"
 opt-level = "z"         # 体积优先
 lto = "fat"             # 全链接时优化
 
+# =============================================================================
+# 覆盖率配置（tarpaulin）
+# =============================================================================
+
+[package.metadata.tarpaulin]
+# 豁免文件：Bevy App 构建、EGUI 绘制回调、main 入口、纯 Component 派生
+exclude-files = [
+    "src/main.rs",
+    "src/font_center.rs",
+    "src/plugins/*",
+]
+
 [[bench]]
 name = "loading_bench"
 harness = false
