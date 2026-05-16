@@ -597,4 +597,179 @@ mod tests {
         let result = manager.load_manifest(&file_path);
         assert!(result.is_err(), "无效 toml 应加载失败");
     }
+
+    #[test]
+    fn test_asset_manager_invalidate_ready_state() {
+        let mut manager = AssetManager::new();
+        manager.states.insert(
+            "test.png".to_string(),
+            AssetLoadState::Ready {
+                path: "test.png".to_string(),
+                handle_id: 1,
+            },
+        );
+        manager.completed_count = 1;
+        manager.cache.put(
+            "test.png".to_string(),
+            CachedAsset {
+                handle_id: 1,
+                loaded_at: Instant::now(),
+                access_count: 1,
+            },
+        );
+        manager.invalidate("test.png");
+        assert!(
+            manager.get_state("test.png").is_none(),
+            "invalidate 后状态应被清除"
+        );
+        assert_eq!(manager.completed_count, 0, "completed_count 应减少");
+        assert!(manager.get_cached("test.png").is_none(), "缓存应被清除");
+    }
+
+    #[test]
+    fn test_asset_manager_invalidate_failed_state() {
+        let mut manager = AssetManager::new();
+        manager.states.insert(
+            "test.png".to_string(),
+            AssetLoadState::Failed {
+                path: "test.png".to_string(),
+                error: "not found".to_string(),
+            },
+        );
+        manager.completed_count = 1;
+
+        manager.invalidate("test.png");
+        assert_eq!(
+            manager.completed_count, 0,
+            "Failed 状态也应减少 completed_count"
+        );
+    }
+
+    #[test]
+    fn test_asset_manager_progress_with_states() {
+        let mut manager = AssetManager::new();
+        manager.states.insert(
+            "a.png".to_string(),
+            AssetLoadState::Ready {
+                path: "a.png".to_string(),
+                handle_id: 1,
+            },
+        );
+        manager.states.insert(
+            "b.png".to_string(),
+            AssetLoadState::Loading {
+                path: "b.png".to_string(),
+                handle_id: 2,
+            },
+        );
+        manager.completed_count = 1;
+        manager.pending_count = 1;
+
+        let (completed, total) = manager.progress();
+        assert_eq!(completed, 1, "已完成 1 个");
+        assert_eq!(total, 2, "总共 2 个");
+    }
+
+    #[test]
+    fn test_asset_manager_pending_count_with_loading() {
+        let mut manager = AssetManager::new();
+        manager.pending_count = 3;
+        assert_eq!(manager.pending_count(), 3, "pending_count 应返回正确值");
+    }
+
+    #[test]
+    fn test_asset_manager_cache_stats_after_hit_and_miss() {
+        let mut manager = AssetManager::new();
+        manager.cache_hits = 5;
+        manager.cache_misses = 3;
+        let (hits, misses) = manager.cache_stats();
+        assert_eq!(hits, 5, "缓存命中应为 5");
+        assert_eq!(misses, 3, "缓存未命中应为 3");
+    }
+
+    #[test]
+    fn test_asset_manager_clear_unused_removes_expired() {
+        let mut manager = AssetManager::new();
+        let old_time = Instant::now() - Duration::from_secs(3600);
+        manager.cache.put(
+            "old.png".to_string(),
+            CachedAsset {
+                handle_id: 1,
+                loaded_at: old_time,
+                access_count: 1,
+            },
+        );
+        manager.states.insert(
+            "old.png".to_string(),
+            AssetLoadState::Ready {
+                path: "old.png".to_string(),
+                handle_id: 1,
+            },
+        );
+        manager.completed_count = 1;
+
+        manager.clear_unused_older_than(Duration::from_secs(60));
+        assert!(manager.get_cached("old.png").is_none(), "超期缓存应被清理");
+        assert_eq!(manager.completed_count, 0, "completed_count 应减少");
+    }
+
+    #[test]
+    fn test_asset_manager_clear_unused_keeps_fresh() {
+        let mut manager = AssetManager::new();
+        let fresh_time = Instant::now();
+        manager.cache.put(
+            "fresh.png".to_string(),
+            CachedAsset {
+                handle_id: 1,
+                loaded_at: fresh_time,
+                access_count: 1,
+            },
+        );
+        manager.states.insert(
+            "fresh.png".to_string(),
+            AssetLoadState::Ready {
+                path: "fresh.png".to_string(),
+                handle_id: 1,
+            },
+        );
+        manager.completed_count = 1;
+
+        manager.clear_unused_older_than(Duration::from_secs(3600));
+        assert!(
+            manager.get_cached("fresh.png").is_some(),
+            "未超期缓存应保留"
+        );
+        assert_eq!(manager.completed_count, 1, "completed_count 不变");
+    }
+
+    #[test]
+    fn test_asset_manager_is_ready_with_ready_state() {
+        let mut manager = AssetManager::new();
+        manager.states.insert(
+            "ready.png".to_string(),
+            AssetLoadState::Ready {
+                path: "ready.png".to_string(),
+                handle_id: 1,
+            },
+        );
+        assert!(manager.is_ready("ready.png"), "Ready 状态应返回 true");
+        assert!(!manager.is_ready("loading.png"), "不存在应返回 false");
+    }
+
+    #[test]
+    fn test_asset_manager_get_cached_returns_data() {
+        let mut manager = AssetManager::new();
+        let now = Instant::now();
+        manager.cache.put(
+            "cached.png".to_string(),
+            CachedAsset {
+                handle_id: 42,
+                loaded_at: now,
+                access_count: 5,
+            },
+        );
+        let cached = manager.get_cached("cached.png").unwrap();
+        assert_eq!(cached.handle_id, 42, "handle_id 应匹配");
+        assert_eq!(cached.access_count, 5, "access_count 应匹配");
+    }
 }

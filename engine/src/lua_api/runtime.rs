@@ -787,4 +787,65 @@ mod tests {
         let result = runtime.load_main_script("/nonexistent/path/script.lua");
         assert!(result.is_err(), "加载不存在的脚本应失败");
     }
+
+    #[test]
+    fn test_lua_runtime_load_main_script_success() {
+        let runtime = LuaRuntime::new().expect("创建失败");
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let script_path = temp_dir.path().join("test_script.lua");
+        std::fs::write(&script_path, "TEST_VAR = 42").unwrap();
+
+        let result = runtime.load_main_script(&script_path);
+        assert!(result.is_ok(), "加载有效脚本应成功: {:?}", result.err());
+
+        let val = runtime.execute_with_return("return TEST_VAR").unwrap();
+        assert_eq!(val, "42", "脚本应被正确执行");
+    }
+
+    #[test]
+    fn test_lua_runtime_used_memory_after_load() {
+        let runtime = LuaRuntime::new().expect("创建失败");
+        let mem_before = runtime.used_memory_kb();
+
+        for i in 0..100 {
+            runtime
+                .execute(&format!("global_tbl_{} = {{}}", i))
+                .unwrap();
+        }
+
+        let mem_after = runtime.used_memory_kb();
+        assert!(
+            mem_after >= mem_before,
+            "加载数据后内存应不减少: before={}, after={}",
+            mem_before,
+            mem_after
+        );
+    }
+
+    #[test]
+    fn test_lua_runtime_call_function_with_result() {
+        let runtime = LuaRuntime::new().expect("创建失败");
+        runtime
+            .execute(
+                r#"
+            function greet(name)
+                return "Hello, " .. name
+            end
+        "#,
+            )
+            .unwrap();
+
+        let result = runtime.call_function("greet", 1.0);
+        assert!(result.is_ok(), "调用有效函数应成功");
+    }
+
+    #[test]
+    fn test_lua_runtime_call_function_return_nil() {
+        let runtime = LuaRuntime::new().expect("创建失败");
+        runtime.execute("function nop() end").unwrap();
+
+        let result = runtime.call_function("nop", 0.0);
+        assert!(result.is_ok(), "返回 nil 的函数也应成功");
+    }
 }
