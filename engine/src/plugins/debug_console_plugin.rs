@@ -136,6 +136,8 @@ pub struct PerformanceMonitor {
     pub frame_time_ms: f32,
     /// 实体数量
     pub entity_count: usize,
+    /// Lua 内存使用量（KB）
+    pub lua_memory_kb: f64,
 }
 
 /// 场景编辑器状态
@@ -188,28 +190,39 @@ impl Plugin for DebugConsolePlugin {
             .init_resource::<PerformanceMonitor>()
             .init_resource::<SceneEditorState>()
             .add_systems(Startup, setup_console)
-            .add_systems(Update, toggle_console)
+            .add_systems(Update, toggle_console.in_set(super::GameSystemSet::Debug))
             .add_systems(
                 Update,
-                (update_performance_data, receive_logs).run_if(console_visible),
+                (update_performance_data, receive_logs)
+                    .run_if(console_visible)
+                    .in_set(super::GameSystemSet::Debug),
             )
             .add_systems(
                 EguiPrimaryContextPass,
-                draw_console.run_if(console_visible),
+                draw_console
+                    .run_if(console_visible)
+                    .in_set(super::GameSystemSet::Debug),
             )
             .add_systems(
                 EguiPrimaryContextPass,
                 draw_performance_monitor
                     .run_if(console_visible)
-                    .run_if(perf_monitor_visible),
+                    .run_if(perf_monitor_visible)
+                    .in_set(super::GameSystemSet::Debug),
             )
             .add_systems(
                 EguiPrimaryContextPass,
-                draw_entity_viewer.run_if(console_visible).run_if(entity_viewer_visible),
+                draw_entity_viewer
+                    .run_if(console_visible)
+                    .run_if(entity_viewer_visible)
+                    .in_set(super::GameSystemSet::Debug),
             )
             .add_systems(
                 EguiPrimaryContextPass,
-                draw_scene_editor.run_if(console_visible).run_if(scene_editor_enabled),
+                draw_scene_editor
+                    .run_if(console_visible)
+                    .run_if(scene_editor_enabled)
+                    .in_set(super::GameSystemSet::Debug),
             );
 
         info!("调试控制台已启动（按 ~ 键呼出）");
@@ -607,7 +620,16 @@ fn draw_entity_viewer(
             entities.sort_by_key(|(e, _, _, _, _, _, _)| e.index());
 
             egui::ScrollArea::vertical().show(ui, |ui| {
-                for (entity, name, has_player, has_camera, has_motion, has_animation, has_transform) in entities {
+                for (
+                    entity,
+                    name,
+                    has_player,
+                    has_camera,
+                    has_motion,
+                    has_animation,
+                    has_transform,
+                ) in entities
+                {
                     let name_str = name.map(|n| n.as_str()).unwrap_or("<未命名>");
                     let id_str = format!("{}: {}", entity.index(), name_str);
 
@@ -768,25 +790,50 @@ fn draw_performance_monitor(mut contexts: EguiContexts, perf_monitor: Res<Perfor
         .show(ctx, |ui| {
             ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
 
+            const FRAME_BUDGET_MS: f32 = 16.67;
             let fps_text_color = fps_color(perf_monitor.current_fps);
-            ui.label(
-                egui::RichText::new(format!("FPS: {:.1}", perf_monitor.current_fps))
-                    .size(14.0)
-                    .strong()
-                    .color(fps_text_color),
-            );
+            let budget_exceeded = perf_monitor.frame_time_ms > FRAME_BUDGET_MS;
+
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new(format!("FPS: {:.1}", perf_monitor.current_fps))
+                        .size(14.0)
+                        .strong()
+                        .color(fps_text_color),
+                );
+                if budget_exceeded {
+                    ui.label(
+                        egui::RichText::new("⚠ 超预算")
+                            .size(11.0)
+                            .color(egui::Color32::from_rgb(255, 90, 90)),
+                    );
+                }
+            });
             ui.label(
                 egui::RichText::new(format!("平均FPS: {:.1}", perf_monitor.avg_fps))
                     .size(12.0)
                     .color(egui::Color32::from_gray(180)),
             );
+            let frame_time_color = if budget_exceeded {
+                egui::Color32::from_rgb(255, 90, 90)
+            } else {
+                egui::Color32::from_gray(180)
+            };
             ui.label(
-                egui::RichText::new(format!("帧时间: {:.2}ms", perf_monitor.frame_time_ms))
+                egui::RichText::new(format!(
+                    "帧时间: {:.2}ms / {:.2}ms",
+                    perf_monitor.frame_time_ms, FRAME_BUDGET_MS
+                ))
+                .size(12.0)
+                .color(frame_time_color),
+            );
+            ui.label(
+                egui::RichText::new(format!("实体数: {}", perf_monitor.entity_count))
                     .size(12.0)
                     .color(egui::Color32::from_gray(180)),
             );
             ui.label(
-                egui::RichText::new(format!("实体数: {}", perf_monitor.entity_count))
+                egui::RichText::new(format!("Lua 内存: {:.1} KB", perf_monitor.lua_memory_kb))
                     .size(12.0)
                     .color(egui::Color32::from_gray(180)),
             );
@@ -914,6 +961,8 @@ fn update_performance_data(
     mut perf_monitor: ResMut<PerformanceMonitor>,
     time: Res<Time>,
     query: Query<Entity>,
+    lua: Res<crate::lua_api::LuaRuntime>,
+    mut frame_counter: Local<u8>,
 ) {
     let delta = time.delta_secs();
     if delta > 0.0 {
@@ -921,7 +970,6 @@ fn update_performance_data(
         perf_monitor.current_fps = fps;
         perf_monitor.frame_time_ms = delta * 1000.0;
 
-        // 使用预分配容量的 VecDeque，避免运行时堆分配
         if perf_monitor.fps_history.len() >= perf_monitor.max_history {
             perf_monitor.fps_history.pop_front();
         }
@@ -937,8 +985,12 @@ fn update_performance_data(
         perf_monitor.avg_fps = sum / perf_monitor.fps_history.len().max(1) as f32;
     }
 
-    // 缓存实体数量，避免 UI 绘制时重复计算
     perf_monitor.entity_count = query.iter().count();
+
+    *frame_counter = frame_counter.wrapping_add(1);
+    if frame_counter.is_multiple_of(30) {
+        perf_monitor.lua_memory_kb = lua.used_memory_kb();
+    }
 }
 
 impl DebugConsoleState {

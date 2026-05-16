@@ -49,11 +49,11 @@ impl Plugin for CameraPlugin {
             .add_systems(
                 Update,
                 (
-                    toggle_mouse_lock_system,
-                    camera_mouse_follow_system,
-                    camera_zoom_system,
-                    camera_follow_system,
-                    check_mouse_lock_status_system,
+                    toggle_mouse_lock_system.in_set(super::GameSystemSet::Camera),
+                    camera_mouse_follow_system.in_set(super::GameSystemSet::Camera),
+                    camera_zoom_system.in_set(super::GameSystemSet::Camera),
+                    camera_follow_system.in_set(super::GameSystemSet::Camera),
+                    check_mouse_lock_status_system.in_set(super::GameSystemSet::Camera),
                 ),
             );
     }

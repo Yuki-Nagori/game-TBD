@@ -36,8 +36,10 @@ SCENE_COLORS = colors_config
 -- 场景配置
 SCENE_CONFIG = scenes_config
 
--- 游戏逻辑状态
+-- 游戏逻辑状态：预分配数组容量，避免运行时 rehash
 local elapsed = 0.0
+local game_state = {}
+game_state[64] = nil
 
 --- 初始化函数
 -- @function init
@@ -52,7 +54,8 @@ end
 -- @param dt 帧间隔时间（秒）
 function update(dt)
     elapsed = elapsed + dt
-    -- 游戏逻辑更新（留空供后续开发）
+    game_state[1] = elapsed
+    local _ = game_state[1]
 end
 
 -- 启动

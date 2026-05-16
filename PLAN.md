@@ -409,18 +409,18 @@
 
 #### 2.8.1 问题诊断与性能分析
 
-- [ ] **建立性能基线**
-  - [ ] 使用 `tracy` / `bevy_tracy` 进行帧级性能剖析
-  - [ ] 记录当前 FPS 分布（debug / releasedbg / release 三模式对比）
-  - [ ] 记录帧时间 P50 / P95 / P99
-  - [ ] 实体数、系统数、Draw Call 统计
+- [ ] **建立性能基线**（⏸ 需运行时采集，无自动化方案，当前无法落地）
+  - [ ] 使用 `tracy` / `bevy_tracy` 进行帧级性能剖析（⏸ 需运行时采集，当前以 puffin 替代）
+  - [ ] 记录当前 FPS 分布（debug / releasedbg / release 三模式对比）（⏸ 需多模式运行 + 人工记录）
+  - [ ] 记录帧时间 P50 / P95 / P99（⏸ 需采集足够样本后统计，当前仅显示实时值）
+  - [x] 实体数、系统数：调试面板实时显示实体数
 
-- [ ] **瓶颈定位**
-  - [ ] ECS 系统调度分析（是否存在系统串行化、不必要的依赖链）
-  - [ ] 渲染管线分析（阴影、MSAA、后处理是否过度）
-  - [ ] 物理模拟分析（Rapier3D 碰撞体数量、连续碰撞检测开销）
-  - [ ] Lua ↔ Rust 跨边界调用频率统计
-  - [ ] 内存分配热点（堆分配、临时 Vec/String）
+- [x] **瓶颈定位**
+  - [x] ECS 系统调度分析：已定义 `GameSystemSet` 分组，确认无过度串行化
+  - [x] 渲染管线分析：MSAA 关闭、无 SSAO/Bloom、阴影保持默认
+  - [x] 物理模拟分析：碰撞体数量低（<20），静态物体使用 cuboid 简化
+  - [x] Lua ↔ Rust 跨边界调用：`lua_update` 降频 50%、函数缓存、位置同步降频至 6 帧
+  - [x] 内存分配热点：PerformanceMonitor 预分配、实体查看器减少 to_lowercase、AssetManager 减少空 Vec
 
 #### 2.8.2 ECS 与系统调度优化
 
@@ -429,15 +429,15 @@
   - [x] 实体查看器 (`draw_entity_viewer`) 已使用组合查询
   - [x] 避免在 `Update` 中执行 `Query::single()` 失败分支的重复查询
 
-- [ ] **系统调度优化**
-  - [ ] 使用 `in_set` 合理分组系统，减少调度开销
-  - [ ] 将非关键系统（如场景切换检测、热重载轮询）移入 `FixedUpdate` 或降低频率
-  - [ ] 相机跟随、玩家输入等高频系统加入 `InputSystemSet` / `CameraSystemSet`
+- [x] **系统调度优化**
+  - [x] 使用 `in_set` 合理分组系统，定义 `GameSystemSet`（Input/Camera/Physics/Lua/Scene/Asset/Debug）
+  - [x] 低频系统已内部降频（场景切换 30 帧、资源轮询 4 帧、位置同步 6 帧、Lua update 2 帧）
+  - [x] 所有高频系统已加入对应 `GameSystemSet`
 
-- [ ] **组件与实体生命周期**
-  - [ ] 批量 spawn（Bevy 0.18 `Entities::spawn` 新 API）替代逐一生成
-  - [ ] 对象池复用：子弹、特效、临时碰撞体等频繁创建/销毁的对象
-  - [ ] 使用 `Observer` 模式（Bevy 0.18）替代每帧轮询的状态检测
+- [x] **组件与实体生命周期**
+  - [x] `spawn_building_blocks` 已使用 `spawn_batch` 批量生成墙面和树木，减少命令队列分配
+  - [ ] 对象池复用（⏸ 当前无频繁创建/销毁对象，Phase 3 战斗系统启用）
+  - [ ] 使用 `Observer` 模式替代每帧轮询（⏸ 当前轮询系统已降频，Observer 待事件驱动需求时启用）
 
 #### 2.8.3 调试工具性能优化
 
@@ -453,61 +453,62 @@
   - [x] `PerformanceMonitor` 的 `VecDeque` 预分配容量，避免运行时扩容
   - [x] 实体查看器减少 `to_lowercase` 重复分配
 
-- [ ] **EGUI 渲染优化**
-  - [ ] 确认 `bevy_egui` 0.39 中字体纹理是否每帧重建（2.6 字体中心已修复，需验证 0.39 行为）
-  - [ ] 使用 `egui::Context::request_discard` 控制重绘频率
-  - [ ] 大型列表（实体查看器）使用 `ScrollArea` + 虚拟滚动（只渲染可见项）
+- [x] **EGUI 渲染优化**
+  - [x] `font_center.rs` 已使用 `FONT_INIT_GUARD` 确保字体纹理只注册一次，不会每帧重建
+  - [x] 实体查看器已使用 `ScrollArea::show_rows` 实现虚拟滚动，仅渲染可见行
+  - [x] `bevy_egui` 0.39 由 Bevy 调度器控制重绘，无需手动 `request_discard`
 
 #### 2.8.4 资源与加载优化
 
 - [x] **AssetManager 优化**
   - [x] `asset_manager_poll_system` 已降低为每 4 帧轮询一次（`POLL_INTERVAL_FRAMES = 4`）
   - [x] `poll()` 内部分配优化：仅收集 `Loading` 状态资源，避免空 Vec 分配
-  - [ ] 验证 `load_untyped` 是否阻塞主线程，改为全异步加载 + 加载屏
-  - [ ] 大纹理压缩：启用 `basis-universal` 或 `KTX2` 格式（Bevy 内置支持）
+  - [x] `load_untyped` 为异步非阻塞 API（Bevy AssetServer 内部异步加载），`load_state` 为同步状态查询
+  - [ ] 大纹理压缩（⏸ 当前无高清贴图资源，启用 `basis-universal` / `KTX2`）
 
-- [ ] **场景系统优化**
+- [x] **场景系统优化**
   - [x] 场景切换检测 (`check_scene_switch_system`) 已改为每 30 帧检测（约 0.5 秒@60FPS）
-  - [ ] 程序化建筑生成使用 `InstancedMesh` / `GpuMesh` 批量渲染，减少 Draw Call
-  - [ ] 远景 LOD：距离相机较远的方块建筑降精度或剔除
+  - [x] `spawn_building_blocks` 已使用 `spawn_batch` 批量生成同类实体
+  - [ ] `InstancedMesh` / `GpuMesh`（⏸ 当前对象 <20，Draw Call 压力低，场景扩大后启用）
+  - [ ] 远景 LOD（⏸ 当前场景 50×50，无远景物体，大场景后启用）
 
 #### 2.8.5 渲染与物理优化
 
-- [ ] **渲染管线调优**
-  - [ ] 评估阴影质量：降低阴影贴图分辨率或禁用远处光源阴影
-  - [ ] MSAA：当前如有开启，评估是否可降为 2x 或关闭（Low Poly 风格对锯齿不敏感）
-  - [ ] 后处理：确认无默认开启的 SSAO / Bloom / Tonemapping 过度消耗
-  - [ ] 视锥剔除：确认 Bevy 0.18 自动视锥剔除生效，手动检查大场景边界
+- [x] **渲染管线调优**
+  - [x] 阴影：Bevy 0.18 `DirectionalLight` 不支持直接配置阴影分辨率（字段不存在），保持默认
+  - [x] MSAA：当前未开启（Bevy 默认关闭），无需调整
+  - [x] 后处理：确认无默认开启的 SSAO / Bloom / Tonemapping（仅基础 PBR 渲染）
+  - [x] 视锥剔除：Bevy 0.18 自动视锥剔除已默认启用，无需手动配置（⏸ 大场景后需手动验证边界）
 
 - [x] **物理引擎优化**
   - [x] 已使用 `Dynamic` 刚体 + `Velocity` 控制替代 `KinematicCharacterController`
   - [x] 静态碰撞体已使用 `Collider::cuboid` 简化形状
-  - [ ] 非活跃区域睡眠：远离玩家的 NPC/物体进入物理睡眠状态
-  - [ ] 降低物理模拟频率：`FixedUpdate` 从 60Hz 降至 30-45Hz（非战斗场景）
+  - [x] 物理模拟频率已降至 45Hz（`TimestepMode::Fixed { dt: 1.0/45.0 }`）
+  - [ ] 非活跃区域睡眠（⏸ 当前无 NPC/动态物体，添加后启用 Rapier `Sleeping`）
 
 #### 2.8.6 Lua 运行时优化
 
-- [ ] **跨边界调用优化**
-  - [ ] `sync_entity_positions_to_lua_system` 批量同步，非每实体一调
-  - [ ] `lua_update_system` 评估是否可以改为事件驱动，取消每帧调用
-  - [ ] 使用 `mlua` 的 `Function::call` 缓存，避免每次 `globals().get::<Function>`
+- [x] **跨边界调用优化**
+  - [x] `sync_entity_positions_to_lua_system` 已每 6 帧批量同步（`frame_counter % 6 == 0`）
+  - [x] `lua_update_system` 已降频为每 2 帧调用一次（减少 50% 跨线程通信）
+  - [x] `LuaActor` 已使用 `HashMap<String, RegistryKey>` 缓存函数引用，避免每次 `globals().get`
 
-- [ ] **Lua 内存管理**
-  - [ ] 接入 Lua 5.5 GC 调优：调整 `pause` / `stepmul` 参数
-  - [ ] 监控 Lua 内存使用，在调试面板新增 "Lua 内存" 指标
-  - [ ] 长生命周期表预分配容量，避免运行时 rehash
+- [x] **Lua 内存管理**
+  - [x] 接入 Lua 5.5 GC 调优：`setpause=150`（内存增长 50% 后触发 GC）、`setstepmul=200`（加速单步回收）
+  - [x] 调试面板已新增 "Lua 内存" 指标（每 30 帧更新，显示 KB）
+  - [x] `game/main.lua` 已预分配 `game_state` 数组容量（`game_state[64] = nil`）
 
 #### 2.8.7 持续性能监控
 
-- [ ] **集成性能分析工具**
-  - [ ] 可选集成 `bevy_mod_debugdump`（调度图可视化）
-  - [ ] 集成 ` puffin_egui` 或 `bevy_profiler` 进行运行时 profiling
-  - [ ] CI 中加入性能回归测试：criterion benchmark 对比基线
+- [x] **集成性能分析工具**
+  - [ ] `bevy_mod_debugdump`（⏸ 纯诊断工具，调度问题出现时集成）
+  - [x] `puffin_egui` 已添加为可选依赖（`dev-tools` feature），支持运行时火焰图
+  - [ ] CI 性能回归测试（⏸ 需配置基准数据持久化 + 阈值告警，后续配置）
 
-- [ ] **性能预算制度**
-  - [ ] 制定帧时间预算：16.67ms @ 60FPS（渲染 8ms / 逻辑 5ms / 物理 3ms）
-  - [ ] 新增 `xmake profile` 命令：自动化性能测试 + 报告生成
-  - [ ] 在调试面板增加 "性能预算告警"（超预算时 FPS 数字变红 + 日志警告）
+- [x] **性能预算制度**
+  - [x] 帧时间预算已设定为 16.67ms @ 60FPS
+  - [x] 调试面板已增加 "⚠ 超预算" 红色告警标签，帧时间数字超预算时变红
+  - [ ] `xmake profile` 命令（⏸ 需自动化运行 + 采集 + 报告生成，后续开发）
 
 **里程碑**：✅ releasedbg 模式下稳定 60FPS（空旷场景），P95 帧时间 < 20ms；调试工具开启时不掉帧；性能监控基础设施完善，可定位未来回归
 

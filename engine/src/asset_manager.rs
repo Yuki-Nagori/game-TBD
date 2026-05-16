@@ -128,11 +128,12 @@ impl AssetManager {
             .collect();
 
         for path in paths {
-            let handle_id = if let Some(AssetLoadState::Loading { handle_id, .. }) = self.states.get(&path) {
-                *handle_id
-            } else {
-                continue;
-            };
+            let handle_id =
+                if let Some(AssetLoadState::Loading { handle_id, .. }) = self.states.get(&path) {
+                    *handle_id
+                } else {
+                    continue;
+                };
 
             // 使用加载时存储的句柄查询加载状态
             let Some(handle) = self.handles.get(&path) else {
@@ -250,7 +251,10 @@ pub fn asset_manager_poll_system(
     asset_server: Res<AssetServer>,
 ) {
     asset_manager.poll_frame_counter = asset_manager.poll_frame_counter.wrapping_add(1);
-    if !asset_manager.poll_frame_counter.is_multiple_of(POLL_INTERVAL_FRAMES) {
+    if !asset_manager
+        .poll_frame_counter
+        .is_multiple_of(POLL_INTERVAL_FRAMES)
+    {
         return;
     }
     if asset_manager.pending_count > 0 {
