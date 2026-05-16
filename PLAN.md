@@ -514,6 +514,90 @@
 
 ---
 
+### Phase 2.9: 代码可信度提升 (Week 13.6-13.8)
+**目标**：将测试覆盖率从 3.59% 提升至 60%+，建立代码质量门禁，确保进入 Phase 3 前的技术债务清零
+
+> 背景：Patch coverage 报告显示当前覆盖率仅 3.59281%，161 行变更代码缺少测试覆盖。在开启 RPG 核心系统（Phase 3）前，必须建立可信的测试基线，避免新功能在薄弱地基上堆砌。
+
+#### 2.9.1 测试覆盖率基线建设
+
+- [ ] **覆盖率目标制定**
+  - [ ] 整体行覆盖率：60%（当前 3.59%）
+  - [ ] 核心模块覆盖率：80%（`core/`、`lua_api/`、`asset_manager/`）
+  - [ ] 工具模块覆盖率：50%（`utils/`、`components/`、`resources/`）
+  - [ ] Bevy 插件系统：优先覆盖 `run_if` 条件和纯函数逻辑（UI 渲染系统暂不要求）
+
+- [ ] **核心模块补测**（高优先级，业务逻辑密集）
+  - [ ] `core/mod.rs`：`GameTime` 边界测试（跨月、跨年、负值处理）、`Display` 格式化、`Cultivation` 状态转换（预留）
+  - [ ] `lua_api/runtime.rs`：`LuaRuntime` 全生命周期测试（创建、销毁、线程安全）、`call_function` 缓存命中、`execute_with_return` 全类型覆盖（布尔、表、函数等）、错误传播链验证
+  - [ ] `lua_api/mod.rs`：`LuaCommand` 序列化/反序列化、枚举变体完整性
+  - [ ] `asset_manager.rs`：`AssetManager` 缓存命中/未命中、`invalidate` 后状态一致性、`clear_unused_older_than` 过期清理、`reload` 流程、加载进度计算、`AssetManifest.validate()` 全错误分支
+
+- [ ] **工具与基础设施补测**（中优先级，支撑模块）
+  - [ ] `utils.rs`：`resolve_asset_root` 多环境路径解析、`get_last_modified` 异常处理（不存在文件、无权限）
+  - [ ] `components/mod.rs`：`PlaceholderWalkAnimation::new`、组件默认构造
+  - [ ] `resources/mod.rs`：`CameraState` 默认值验证、`ScriptHotReload::new` 定时器初始化、`EntityRegistry` 插入/查询/覆盖
+  - [ ] `constants.rs`：常量存在性验证（编译期测试）
+
+- [ ] **插件系统测试策略**（低优先级，Bevy 集成测试成本高）
+  - [ ] 纯函数提取：将 `run_if` 条件、状态计算逻辑从系统中抽离为独立函数并加测试
+  - [ ] 命令解析测试：`debug_console_plugin` 的命令解析器（`entities`、`editor`、`help` 等）
+  - [ ] 配置加载测试：`scene_plugin`、`player_plugin`、`camera_plugin` 的 Lua 配置解析逻辑
+
+#### 2.9.2 测试质量规范
+
+- [ ] **测试命名规范**
+  - 格式：`test_{模块}_{场景}_{预期结果}`
+  - 示例：`test_asset_manager_cache_hit_returns_same_id`、`test_lua_runtime_invalid_syntax_returns_error`
+
+- [ ] **测试组织规范**
+  - 单元测试：与源码同文件（`#[cfg(test)] mod tests`），测试私有函数
+  - 集成测试：`engine/tests/` 下按模块分文件，测试公共 API 完整链路
+  - 夹具数据：`tests/fixtures/` 下集中管理，禁止测试内硬编码复杂 Lua 脚本
+
+- [ ] **断言质量标准**
+  - 禁止裸 `assert!` 无消息：必须提供失败原因说明
+  - 错误测试必须验证具体错误类型，禁止仅 `assert!(result.is_err())`
+  - 浮点比较使用 `approx_eq` 或自定义 epsilon，禁止直接 `==`
+
+#### 2.9.3 CI/CD 质量门禁强化
+
+- [ ] **覆盖率门禁**
+  - [ ] `coverage.yml` 增加 `--fail-under 60`（整体覆盖率低于 60% 时 CI 失败）
+  - [ ] PR 级别覆盖率检查：新增代码覆盖率不得低于 70%（codecov patch check）
+  - [ ] 覆盖率报告上传至 Codecov 后配置 PR 评论和状态检查
+
+- [ ] **测试前置检查**
+  - [ ] `build-linux.yml` / `build-macos.yml` / `build-windows.yml` 中增加 `cargo test --features dev-tools`
+  - [ ] `xmake check` 命令扩展：先运行测试，再运行 clippy/luacheck
+
+- [ ] **代码审查清单更新**
+  - [ ] 更新 `CONTRIBUTING.md`：新增测试要求章节（"无测试，不合并"）
+  - [ ] PR 模板增加测试自检项：是否新增测试、是否覆盖边界情况、是否修复了 flaky test
+
+#### 2.9.4 性能规范执行检查
+
+- [ ] **对照 `docs/performance-guidelines.md` 逐项审计**
+  - [ ] `engine/src/` 所有 `.rs` 文件通过 `grep` 检查：`to_lowercase()` / `format!` 是否在循环内
+  - [ ] 检查所有 `Query` 是否使用 `With<T>` / `Without<T>` 过滤
+  - [ ] 检查 `Vec` / `VecDeque` 是否有 `with_capacity`
+  - [ ] 检查低频系统是否有内部降频（`frame_counter`）
+  - [ ] 产出审计报告，记录不符合项和修复计划
+
+#### 2.9.5 文档与可信度度量
+
+- [ ] **测试文档**
+  - [ ] 新增 `docs/testing-guide.md`：测试策略、命名规范、夹具使用指南、Mock 策略
+  - [ ] 在 `README.md` 测试章节补充覆盖率徽章和运行命令
+
+- [ ] **可信度度量看板**
+  - [ ] 在 `PLAN.md` 本阶段末尾记录基线数据：测试数量、覆盖率、平均测试耗时
+  - [ ] 设定 Phase 3 质量红线：新增功能必须配套测试，覆盖率不得下降
+
+**里程碑**：✅ `cargo test --features dev-tools` 全部通过（新增 30+ 测试）、 tarpaulin 行覆盖率 ≥ 60%、CI 覆盖率门禁生效、性能规范审计无遗留问题
+
+---
+
 ### Phase 3: RPG 核心系统 (Week 14-21)
 **目标**：功法、战斗、对话、任务系统
 
