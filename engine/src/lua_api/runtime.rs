@@ -54,10 +54,6 @@ enum LuaRequest {
 #[derive(Clone, Resource)]
 pub struct LuaRuntime {
     sender: Sender<LuaRequest>,
-    // 这些字段用于传递给 Actor 线程，通过 Clone 保持引用
-    #[allow(dead_code)]
-    command_queue: Arc<Mutex<Vec<LuaCommand>>>,
-    #[allow(dead_code)]
     positions: Arc<Mutex<HashMap<String, [f32; 3]>>>,
 }
 
@@ -85,7 +81,6 @@ impl LuaRuntime {
 
         Ok(Self {
             sender,
-            command_queue,
             positions,
         })
     }
@@ -213,9 +208,6 @@ impl LuaRuntime {
 struct LuaActor {
     lua: Lua,
     command_queue: Arc<Mutex<Vec<LuaCommand>>>,
-    // 共享的位置状态，Lua 代码可以通过 API 读取
-    #[allow(dead_code)]
-    positions: Arc<Mutex<HashMap<String, [f32; 3]>>>,
 }
 
 impl LuaActor {
@@ -230,7 +222,7 @@ impl LuaActor {
         Self::register_mod_api(&lua, Arc::clone(&command_queue), Arc::clone(&positions))
             .map_err(|e| anyhow::anyhow!("注册 Mod API 失败: {}", e))?;
 
-        Ok(Self { lua, command_queue, positions })
+        Ok(Self { lua, command_queue })
     }
 
     fn run(&mut self, receiver: Receiver<LuaRequest>) {

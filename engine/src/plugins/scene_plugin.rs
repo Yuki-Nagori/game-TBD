@@ -55,7 +55,6 @@ impl From<ColorRgb> for Color {
 
 /// 场景对象配置
 #[derive(Debug, Clone, serde::Deserialize)]
-#[allow(dead_code)]
 pub struct SceneObjectConfig {
     /// 对象类型（如 "building", "tree"）
     pub r#type: String,
@@ -69,7 +68,6 @@ pub struct SceneObjectConfig {
 
 /// 场景连接配置
 #[derive(Debug, Clone, serde::Deserialize)]
-#[allow(dead_code)]
 pub struct SceneConnectionConfig {
     /// 目标场景 ID
     pub to: String,
@@ -83,7 +81,6 @@ pub struct SceneConnectionConfig {
 
 /// 单个场景配置
 #[derive(Debug, Clone, serde::Deserialize)]
-#[allow(dead_code)]
 pub struct SceneConfig {
     /// 场景名称
     pub name: String,

@@ -12,7 +12,7 @@
 
 use bevy::app::AppExit;
 use bevy::prelude::*;
-use bevy_egui::{EguiContexts, EguiPlugin, egui};
+use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, egui};
 use std::collections::VecDeque;
 
 /// 已知命令列表（用于 Tab 补全）
@@ -174,15 +174,11 @@ impl Plugin for DebugConsolePlugin {
             .add_systems(Startup, setup_console)
             .add_systems(
                 Update,
-                (
-                    toggle_console,
-                    draw_console,
-                    draw_entity_viewer,
-                    draw_scene_editor,
-                    draw_performance_monitor,
-                    update_performance_data,
-                    receive_logs,
-                ),
+                (toggle_console, update_performance_data, receive_logs),
+            )
+            .add_systems(
+                EguiPrimaryContextPass,
+                (draw_console, draw_entity_viewer, draw_scene_editor, draw_performance_monitor),
             );
 
         info!("调试控制台已启动（按 ~ 键呼出）");
