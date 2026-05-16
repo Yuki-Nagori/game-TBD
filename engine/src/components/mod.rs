@@ -40,3 +40,47 @@ impl PlaceholderWalkAnimation {
 /// 编辑器放置的物体标记组件
 #[derive(Component)]
 pub struct EditorPlaced;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_placeholder_walk_animation_new() {
+        let anim = PlaceholderWalkAnimation::new(1.5);
+        assert!(
+            (anim.base_height - 1.5).abs() < f32::EPSILON,
+            "base_height 应等于传入值"
+        );
+        assert_eq!(anim.phase, 0.0, "新创建时 phase 应为 0");
+    }
+
+    #[test]
+    fn test_placeholder_walk_animation_default() {
+        let anim = PlaceholderWalkAnimation::new(0.0);
+        assert_eq!(anim.base_height, 0.0);
+        assert_eq!(anim.phase, 0.0);
+    }
+
+    #[test]
+    fn test_character_motion_default() {
+        let motion = CharacterMotion::default();
+        assert!(!motion.is_moving, "默认不应在移动");
+        assert_eq!(motion.facing_yaw, 0.0, "默认朝向应为 0");
+    }
+
+    #[test]
+    fn test_player_component_exists() {
+        let _player = Player;
+    }
+
+    #[test]
+    fn test_third_person_camera_component_exists() {
+        let _cam = ThirdPersonCamera;
+    }
+
+    #[test]
+    fn test_editor_placed_component_exists() {
+        let _placed = EditorPlaced;
+    }
+}

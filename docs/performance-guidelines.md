@@ -8,6 +8,110 @@
 
 ## Rust 规范
 
+### 0. 错误处理
+
+#### 0.1 用 `Result` 传播错误，不 panic
+
+```rust
+// ❌ 坏：公共 API 中 panic
+pub fn load_config(path: &str) -> Config {
+    let content = std::fs::read_to_string(path).unwrap(); // 禁止！
+    parse_config(&content)
+}
+
+// ✅ 好：返回 Result，让调用者决定
+pub fn load_config(path: &str) -> Result<Config, ConfigError> {
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| ConfigError::Io(path.to_string(), e))?;
+    parse_config(&content)
+}
+```
+
+**为什么**：游戏引擎在运行时不应因单个文件加载失败而崩溃。`Result` 允许优雅降级（如使用默认配置）。
+
+#### 0.2 错误类型使用 `thiserror` 派生
+
+```rust
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum AssetError {
+    #[error("文件未找到: {0}")]
+    NotFound(String),
+    #[error("IO 错误: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("解析失败: {0}")]
+    Parse(String),
+}
+```
+
+**原则**：
+- 每个模块定义自己的错误枚举
+- 使用 `#[from]` 自动转换底层错误
+- 错误消息面向开发者，包含上下文（文件名、行号等）
+
+#### 0.3 panic 策略
+
+| 场景 | 处理方式 |
+|:---|:---|
+| 文件不存在 | `Result::Err` |
+| 配置格式错误 | `Result::Err` |
+| 资源加载失败 | `Result::Err` |
+| 内部状态不一致（bug） | `expect("不变式说明")` |
+| 除以零 / 数组越界（不应发生） | `expect("理由")` 或 `debug_assert!` |
+
+**禁止裸 `unwrap()`**。如果必须用，使用 `expect("说明为什么这里不会失败")`。
+
+```rust
+// ✅ 好： unwrap 附带理由
+let config = load_config(path).expect("主配置必须在启动时存在");
+
+// ❌ 坏：裸 unwrap
+let config = load_config(path).unwrap();
+```
+
+### 0.4 并发与线程安全
+
+#### Actor 模式替代共享可变状态
+
+```rust
+// ✅ 好：LuaRuntime 使用 Actor 模式，内部线程持有 Lua 状态
+pub struct LuaRuntime {
+    sender: Sender<LuaRequest>,      // Send + Sync
+    positions: Arc<Mutex<HashMap<...>>>, // 线程安全共享
+}
+
+// ❌ 坏：直接暴露非 Send 类型
+pub struct BadRuntime {
+    lua: Lua, // !Send，不能在 Bevy 系统中使用
+}
+```
+
+**原则**：
+- `Resource` 必须是 `Send + Sync`
+- 非 `Send` 类型（如 `mlua::Lua`）必须包装在独立线程中，通过通道通信
+- `Mutex` 优先使用 `std::sync::Mutex`（而非 `parking_lot`），保持标准库一致性
+- 锁持有时间最小化：只保护临界区，不要在锁内做 IO 或复杂计算
+
+#### 锁使用规范
+
+```rust
+// ✅ 好：锁持有时间最短
+let commands = {
+    let mut queue = self.command_queue.lock().unwrap();
+    std::mem::take(&mut *queue)
+};
+// 锁已释放，后续处理不阻塞其他线程
+
+// ❌ 坏：锁内做复杂操作
+let mut queue = self.command_queue.lock().unwrap();
+for cmd in &commands {
+    process(cmd); // 阻塞其他线程！
+}
+```
+
+---
+
 ### 1. ECS 查询
 
 #### 1.1 使用 `With<T>` / `Without<T>` 过滤，避免全表扫描
@@ -251,6 +355,63 @@ for (id, entity) in &registry.by_id {
 
 ## Lua 规范
 
+### 0. 错误处理与日志
+
+#### 0.1 Lua 脚本不 panic
+
+```lua
+-- ❌ 坏：脚本错误导致引擎崩溃
+function process_event(event)
+    if not event.id then
+        error("event 缺少 id") -- 禁止！会传播到 Rust 层导致 panic
+    end
+end
+
+-- ✅ 好：错误通过日志报告，返回降级结果
+function process_event(event)
+    if not event.id then
+        log_error("process_event: event 缺少 id，跳过处理")
+        return nil
+    end
+    -- 正常处理...
+end
+```
+
+**原则**：
+- Lua 脚本禁止调用 `error()` 或 `assert(false)` 抛出不可恢复错误
+- 所有错误通过 `log_error` / `log_warn` 报告
+- 函数返回 `nil` 或默认值表示降级处理
+
+#### 0.2 日志级别使用规范
+
+```lua
+-- trace：最详细的调试信息（每帧调用，生产环境关闭）
+log_debug("帧更新: dt=" .. dt)
+
+-- debug：开发调试信息（场景加载、状态变化）
+log_debug("场景切换: " .. scene_name)
+
+-- info：正常运行信息（玩家操作、事件触发）
+log_info("玩家进入区域: " .. area_id)
+
+-- warn：非致命异常（资源缺失、配置回退）
+log_warn("贴图未找到，使用默认: " .. texture_path)
+
+-- error：功能失效（脚本语法错误、必要数据缺失）
+log_error("任务数据加载失败: " .. quest_id)
+```
+
+**性能注意**：`log_debug` 在 release 模式下会被 Rust 层过滤，但字符串构造仍发生。高频日志使用条件编译：
+
+```lua
+-- ✅ 好：高频日志加条件
+if DEBUG_MODE then
+    log_debug("每帧位置: " .. tostring(pos))
+end
+```
+
+---
+
 ### 1. GC 调优
 
 #### 1.1 初始化时设置 GC 参数
@@ -360,6 +521,138 @@ end
 
 ---
 
+## 模块组织与 API 设计
+
+### 1. 模块边界
+
+- **每个 `.rs` 文件只负责一个概念域**。文件超过 300 行考虑拆分。
+- **公共 API 最小化**：`pub` 只暴露必要接口，内部实现用 `pub(crate)` 或 `pub(super)`。
+- **禁止循环依赖**：`core/` 不依赖 `plugins/`，`plugins/` 通过 `Resource` 和 `Event` 通信。
+
+```rust
+// ✅ 好：模块层次清晰
+engine/src/
+├── lib.rs           # 公共 API 门面
+├── core/            # 纯逻辑（无 Bevy 依赖或仅依赖 bevy::math）
+├── components/      # ECS 组件定义
+├── resources/       # 全局状态
+├── lua_api/         # Lua 运行时与 API
+├── asset_manager.rs # 资源管理
+├── font_center.rs   # UI 字体基础设施
+├── utils.rs         # 纯工具函数
+└── plugins/         # Bevy 插件
+    ├── mod.rs       # GamePlugin 汇总
+    ├── player_plugin.rs
+    ├── camera_plugin.rs
+    └── ...
+```
+
+### 2. 向后兼容
+
+- **Lua API 变更必须保留旧接口至少一个版本周期**。
+- **公共 Resource 的字段增改**：新增字段用 `Option<T>`，旧代码无感。
+- **枚举新增变体**：非 exhaustive 枚举对外暴露时需处理 `Unknown` 情况。
+
+```rust
+// ✅ 好：新增字段不破坏旧代码
+#[derive(Resource)]
+pub struct GameConfig {
+    pub player_speed: f32,
+    // Phase 3 新增，旧配置兼容
+    pub cultivation_enabled: Option<bool>,
+}
+
+impl Default for GameConfig {
+    fn default() -> Self {
+        Self {
+            player_speed: 5.0,
+            cultivation_enabled: Some(false), // 默认关闭，旧存档安全
+        }
+    }
+}
+```
+
+### 3. Component 设计
+
+- **Component 必须是纯数据**，禁止包含业务逻辑方法。
+- **允许的方法**：构造函数 `new()`、`Default` 实现、简单的 getter/setter。
+- **复杂计算放在 System 中**，不要在 Component 内持有 `Query` 或 `Commands`。
+
+```rust
+// ✅ 好：纯数据 + 简单构造
+#[derive(Component)]
+pub struct CharacterMotion {
+    pub is_moving: bool,
+    pub facing_yaw: f32,
+}
+
+impl CharacterMotion {
+    pub fn new() -> Self {
+        Self { is_moving: false, facing_yaw: 0.0 }
+    }
+}
+
+// ❌ 坏：Component 持有业务逻辑
+#[derive(Component)]
+pub struct BadCharacter {
+    // ...
+}
+
+impl BadCharacter {
+    pub fn attack(&mut self, target: Entity, commands: &mut Commands) {
+        // 业务逻辑不应在 Component 中！
+    }
+}
+```
+
+---
+
+## 文档注释规范
+
+### 1. Rust 文档（rustdoc）
+
+- 所有 `pub` 项必须有 `///` 文档。
+- 文档包含：一句话描述、详细说明（如需要）、参数、返回值、错误、示例。
+
+```rust
+/// 推进游戏内时间
+///
+/// 处理小时、日、月、年的进位。每月固定 30 天。
+///
+/// # 参数
+/// - `hours`: 推进的小时数，可为负数（回退时间）
+///
+/// # 示例
+/// ```
+/// let mut time = GameTime::default();
+/// time.advance(25.0); // 推进 25 小时 = 1 天 1 小时
+/// assert_eq!(time.day, 2);
+/// ```
+pub fn advance(&mut self, hours: f32) {
+    // ...
+}
+```
+
+### 2. Lua 文档（ldoc）
+
+- 所有导出的 Lua 函数/表必须有 ldoc 注释。
+- 配置文件头部说明用途和字段类型。
+
+```lua
+--- 玩家配置
+-- @table PLAYER_CONFIG
+-- @field model_scene string 模型文件路径（相对于 assets/models/）
+-- @field scale number 模型缩放比例
+-- @field speed number 移动速度（单位/秒）
+PLAYER_CONFIG = {
+    model_scene = "player.gltf",
+    scale = 1.0,
+    speed = 5.0,
+}
+```
+
+---
+
 ## 检查清单（Code Review 用）
 
 提交 PR 前自检：
@@ -373,6 +666,11 @@ end
 - [ ] 资源轮询有间隔（非每帧）
 - [ ] Lua 大表有预分配
 - [ ] clippy 零警告 + luacheck 零警告
+- [ ] 无裸 `unwrap()` / `unwrap_unchecked()`（有 `expect` 理由）
+- [ ] 公共 API 有 `///` 文档注释
+- [ ] Component 是纯数据，无业务逻辑方法
+- [ ] Lua 脚本无 `error()` / `assert(false)` 不可恢复错误
+- [ ] 新增字段使用 `Option<T>` 保证向后兼容（如适用）
 
 ---
 

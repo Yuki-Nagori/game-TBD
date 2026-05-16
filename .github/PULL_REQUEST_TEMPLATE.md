@@ -14,7 +14,10 @@
 - [ ] 代码已通过 `xmake check`
 - [ ] 代码已格式化 (`xmake format`)
 - [ ] 相关文档已更新
-- [ ] 测试已添加/通过
+- [ ] 新增功能配套单元测试（`#[cfg(test)]`）
+- [ ] Bug 修复配套回归测试（`engine/tests/`）
+- [ ] 测试已覆盖边界情况
+- [ ] 无 flaky test
 
 ## 相关Issue
 <!-- 关联的Issue编号 -->

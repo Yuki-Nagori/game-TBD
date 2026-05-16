@@ -38,7 +38,7 @@ jobs:
       - name: Generate coverage
         run: |
           cd engine
-          cargo tarpaulin --features dev-tools --out Xml --out Html
+          cargo tarpaulin --features dev-tools --out Xml --out Html --fail-under 60
       - name: Upload to Codecov
         uses: codecov/codecov-action@v4
         with:

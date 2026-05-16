@@ -600,3 +600,252 @@ impl LuaActor {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_lua_runtime_creation_success() {
+        let runtime = LuaRuntime::new();
+        assert!(runtime.is_ok(), "LuaRuntime::new 应成功创建");
+    }
+
+    #[test]
+    fn test_lua_runtime_execute_simple_code() {
+        let runtime = LuaRuntime::new().expect("创建失败");
+        let result = runtime.execute("x = 1 + 1");
+        assert!(result.is_ok(), "简单代码应执行成功");
+    }
+
+    #[test]
+    fn test_lua_runtime_execute_invalid_syntax_returns_error() {
+        let runtime = LuaRuntime::new().expect("创建失败");
+        let result = runtime.execute("invalid syntax!!!");
+        assert!(result.is_err(), "无效语法应返回错误");
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Lua 执行失败") || err_msg.contains("syntax"),
+            "错误信息应包含执行失败原因: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_lua_runtime_execute_with_return_nil() {
+        let runtime = LuaRuntime::new().expect("创建失败");
+        let result = runtime.execute_with_return("return nil").unwrap();
+        assert_eq!(result, "nil", "nil 应返回字符串 'nil'");
+    }
+
+    #[test]
+    fn test_lua_runtime_execute_with_return_boolean() {
+        let runtime = LuaRuntime::new().expect("创建失败");
+        assert_eq!(
+            runtime.execute_with_return("return true").unwrap(),
+            "true",
+            "true 应返回字符串 'true'"
+        );
+        assert_eq!(
+            runtime.execute_with_return("return false").unwrap(),
+            "false",
+            "false 应返回字符串 'false'"
+        );
+    }
+
+    #[test]
+    fn test_lua_runtime_execute_with_return_integer() {
+        let runtime = LuaRuntime::new().expect("创建失败");
+        let result = runtime.execute_with_return("return 42").unwrap();
+        assert_eq!(result, "42", "整数应正确返回");
+    }
+
+    #[test]
+    fn test_lua_runtime_execute_with_return_number() {
+        let runtime = LuaRuntime::new().expect("创建失败");
+        let result = runtime.execute_with_return("return 3.14").unwrap();
+        assert_eq!(result, "3.14", "浮点数应正确返回");
+    }
+
+    #[test]
+    fn test_lua_runtime_execute_with_return_string() {
+        let runtime = LuaRuntime::new().expect("创建失败");
+        let result = runtime.execute_with_return("return 'hello'").unwrap();
+        assert_eq!(result, "hello", "字符串应正确返回");
+    }
+
+    #[test]
+    fn test_lua_runtime_execute_with_return_table() {
+        let runtime = LuaRuntime::new().expect("创建失败");
+        let result = runtime
+            .execute_with_return("return {a = 1, b = 2}")
+            .unwrap();
+        assert!(
+            result.contains("a") && result.contains("1"),
+            "表应序列化为 JSON: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_lua_runtime_drain_commands_empty() {
+        let runtime = LuaRuntime::new().expect("创建失败");
+        let commands = runtime.drain_commands();
+        assert!(commands.is_empty(), "新创建的 runtime 命令队列应为空");
+    }
+
+    #[test]
+    fn test_lua_runtime_update_and_remove_entity_position() {
+        let runtime = LuaRuntime::new().expect("创建失败");
+        runtime.update_entity_position("test_entity", Vec3::new(1.0, 2.0, 3.0));
+        runtime.remove_entity_position("test_entity");
+    }
+
+    #[test]
+    fn test_lua_runtime_used_memory_non_negative() {
+        let runtime = LuaRuntime::new().expect("创建失败");
+        let memory = runtime.used_memory_kb();
+        assert!(memory >= 0.0, "内存使用量不应为负: {}", memory);
+    }
+
+    #[test]
+    fn test_lua_runtime_get_config() {
+        let runtime = LuaRuntime::new().expect("创建失败");
+        runtime
+            .execute("TEST_CFG = { speed = 5.5, name = 'test' }")
+            .unwrap();
+        let config: Option<std::collections::HashMap<String, serde_json::Value>> =
+            runtime.get_config("TEST_CFG");
+        assert!(config.is_some(), "应能获取到配置表");
+        let config = config.unwrap();
+        assert_eq!(config["speed"], 5.5, "配置值应匹配");
+        assert_eq!(config["name"], "test", "配置值应匹配");
+    }
+
+    #[test]
+    fn test_lua_runtime_get_config_nonexistent() {
+        let runtime = LuaRuntime::new().expect("创建失败");
+        let config: Option<std::collections::HashMap<String, serde_json::Value>> =
+            runtime.get_config("NONEXISTENT_CONFIG_12345");
+        assert!(config.is_none(), "不存在的配置应返回 None");
+    }
+
+    #[test]
+    fn test_lua_runtime_call_function_cached() {
+        let runtime = LuaRuntime::new().expect("创建失败");
+        runtime
+            .execute("function update(dt) global_counter = (global_counter or 0) + dt end")
+            .unwrap();
+
+        let result1 = runtime.call_function("update", 1.0);
+        assert!(result1.is_ok(), "首次调用应成功");
+
+        let result2 = runtime.call_function("update", 2.0);
+        assert!(result2.is_ok(), "缓存命中后再次调用应成功");
+    }
+
+    #[test]
+    fn test_lua_runtime_call_function_nonexistent() {
+        let runtime = LuaRuntime::new().expect("创建失败");
+        let result = runtime.call_function("nonexistent_function_12345", 1.0);
+        assert!(result.is_err(), "调用不存在的函数应返回错误");
+    }
+
+    #[test]
+    fn test_lua_runtime_entity_api_creates_commands() {
+        let runtime = LuaRuntime::new().expect("创建失败");
+        runtime
+            .execute(
+                r#"
+            Entity.create("npc")
+            Entity.set_position("npc1", 1.0, 2.0, 3.0)
+        "#,
+            )
+            .unwrap();
+
+        let commands = runtime.drain_commands();
+        assert_eq!(commands.len(), 2, "应生成 2 条命令");
+        match &commands[0] {
+            LuaCommand::CreateEntity { entity_type, .. } => {
+                assert_eq!(entity_type, "npc", "实体类型应为 npc");
+            }
+            _ => panic!("第一条命令应为 CreateEntity"),
+        }
+        match &commands[1] {
+            LuaCommand::SetPosition { x, y, z, .. } => {
+                assert!((*x - 1.0).abs() < f32::EPSILON, "X 坐标应为 1.0");
+                assert!((*y - 2.0).abs() < f32::EPSILON, "Y 坐标应为 2.0");
+                assert!((*z - 3.0).abs() < f32::EPSILON, "Z 坐标应为 3.0");
+            }
+            _ => panic!("第二条命令应为 SetPosition"),
+        }
+    }
+
+    #[test]
+    fn test_lua_runtime_load_main_script_nonexistent() {
+        let runtime = LuaRuntime::new().expect("创建失败");
+        let result = runtime.load_main_script("/nonexistent/path/script.lua");
+        assert!(result.is_err(), "加载不存在的脚本应失败");
+    }
+
+    #[test]
+    fn test_lua_runtime_load_main_script_success() {
+        let runtime = LuaRuntime::new().expect("创建失败");
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let script_path = temp_dir.path().join("test_script.lua");
+        std::fs::write(&script_path, "TEST_VAR = 42").unwrap();
+
+        let result = runtime.load_main_script(&script_path);
+        assert!(result.is_ok(), "加载有效脚本应成功: {:?}", result.err());
+
+        let val = runtime.execute_with_return("return TEST_VAR").unwrap();
+        assert_eq!(val, "42", "脚本应被正确执行");
+    }
+
+    #[test]
+    fn test_lua_runtime_used_memory_after_load() {
+        let runtime = LuaRuntime::new().expect("创建失败");
+        let mem_before = runtime.used_memory_kb();
+
+        for i in 0..100 {
+            runtime
+                .execute(&format!("global_tbl_{} = {{}}", i))
+                .unwrap();
+        }
+
+        let mem_after = runtime.used_memory_kb();
+        assert!(
+            mem_after >= mem_before,
+            "加载数据后内存应不减少: before={}, after={}",
+            mem_before,
+            mem_after
+        );
+    }
+
+    #[test]
+    fn test_lua_runtime_call_function_with_result() {
+        let runtime = LuaRuntime::new().expect("创建失败");
+        runtime
+            .execute(
+                r#"
+            function greet(name)
+                return "Hello, " .. name
+            end
+        "#,
+            )
+            .unwrap();
+
+        let result = runtime.call_function("greet", 1.0);
+        assert!(result.is_ok(), "调用有效函数应成功");
+    }
+
+    #[test]
+    fn test_lua_runtime_call_function_return_nil() {
+        let runtime = LuaRuntime::new().expect("创建失败");
+        runtime.execute("function nop() end").unwrap();
+
+        let result = runtime.call_function("nop", 0.0);
+        assert!(result.is_ok(), "返回 nil 的函数也应成功");
+    }
+}

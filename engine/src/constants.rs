@@ -63,3 +63,57 @@ pub const TREE_SIZE: f32 = 1.5;
 
 /// 热重载检查间隔（秒）
 pub const HOT_RELOAD_INTERVAL: f32 = 0.5;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_constants_exist_and_are_positive() {
+        assert!(!PLAYER_ID.is_empty(), "PLAYER_ID 不应为空");
+        assert!(PLAYER_COLLIDER_RADIUS > 0.0, "碰撞体半径应为正数");
+        assert!(PLAYER_COLLIDER_HEIGHT > 0.0, "碰撞体高度应为正数");
+        assert!(CAMERA_DISTANCE_MIN > 0.0, "相机最小距离应为正数");
+        assert!(
+            CAMERA_DISTANCE_MAX > CAMERA_DISTANCE_MIN,
+            "相机最大距离应大于最小距离"
+        );
+        assert!(
+            CAMERA_PITCH_MIN < CAMERA_PITCH_MAX,
+            "相机最小俯仰角应小于最大俯仰角"
+        );
+        assert!(CAMERA_ZOOM_SPEED > 0.0, "缩放速度应为正数");
+        assert!(CAMERA_MOUSE_SENSITIVITY > 0.0, "鼠标灵敏度应为正数");
+        assert!(PLAYER_SPEED > 0.0, "玩家速度应为正数");
+        assert!(!PLAYER_MODEL_SCENE.is_empty(), "模型场景路径不应为空");
+        assert!(PLAYER_MODEL_SCALE > 0.0, "模型缩放应为正数");
+        assert!(WALK_BOB_AMPLITUDE >= 0.0, "动画振幅不应为负");
+        assert!(WALK_BOB_SPEED > 0.0, "动画速度应为正数");
+        assert!(ROTATION_SPEED > 0.0, "旋转速度应为正数");
+        assert!(WALL_SIZE > 0.0, "墙体尺寸应为正数");
+        assert!(TREE_SIZE > 0.0, "树木尺寸应为正数");
+        assert!(HOT_RELOAD_INTERVAL > 0.0, "热重载间隔应为正数");
+    }
+
+    #[test]
+    fn test_camera_distance_bounds() {
+        assert_eq!(CAMERA_DISTANCE_DEFAULT, 20.0, "默认相机距离应为 20.0");
+        assert!(
+            CAMERA_DISTANCE_DEFAULT >= CAMERA_DISTANCE_MIN
+                && CAMERA_DISTANCE_DEFAULT <= CAMERA_DISTANCE_MAX,
+            "默认相机距离应在最小和最大距离之间"
+        );
+    }
+
+    #[test]
+    fn test_camera_pitch_in_radians() {
+        assert!(
+            CAMERA_PITCH_MIN > 0.0 && CAMERA_PITCH_MIN < std::f32::consts::PI,
+            "最小俯仰角应在合理弧度范围内"
+        );
+        assert!(
+            CAMERA_PITCH_MAX > 0.0 && CAMERA_PITCH_MAX < std::f32::consts::PI,
+            "最大俯仰角应在合理弧度范围内"
+        );
+    }
+}

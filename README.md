@@ -264,7 +264,7 @@ xmake pack-assets          # 基于 manifest.toml 打包资产包
 - [x] 资产打包工具（`xmake pack-assets`）
 
 ### 测试与质量
-- [x] Rust 单元测试 / 集成测试（`cargo test --features dev-tools`）
+- [x] Rust 单元测试（`#[cfg(test)]`）/ 集成测试（`engine/tests/`）
 - [x] Lua 单元测试（busted）
 - [x] 加载时间基准测试（criterion）
 - [x] clippy 零警告强制检查
@@ -272,6 +272,10 @@ xmake pack-assets          # 基于 manifest.toml 打包资产包
 - [x] rustdoc 完整文档（`RUSTDOCFLAGS="-D warnings"`）
 - [x] Lua API 文档（ldoc）
 - [x] 三平台 CI 构建 + 自动发布 + 代码覆盖率
+
+**覆盖率：** 整体 ≥ 60%，PR Patch ≥ 70%  
+**测试运行：** `xmake check` 或 `cd engine && cargo test --features dev-tools`  
+**测试文档：** 详见 [docs/testing-guide.md](docs/testing-guide.md)
 
 ## 开发计划
 

@@ -253,11 +253,11 @@ task("check")
         -- debug 模式使用默认 dev profile (mode_flag 为空)
 
         print("=== Checking Rust code ===")
-        print("Running clippy...")
-        os.exec("cargo clippy --manifest-path engine/Cargo.toml " .. mode_flag .. " --all-features --no-deps -- -D warnings")
-        
         print("Running tests...")
         os.exec("cargo test --manifest-path engine/Cargo.toml " .. mode_flag .. " --features dev-tools -j 2")
+
+        print("Running clippy...")
+        os.exec("cargo clippy --manifest-path engine/Cargo.toml " .. mode_flag .. " --all-features --no-deps -- -D warnings")
         
         print("\n=== Checking Lua code ===")
         if try {function () return os.iorunv("which", {"luacheck"}) end} then
