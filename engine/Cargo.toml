@@ -121,15 +121,10 @@ lto = "fat"             # 全链接时优化
 
 # =============================================================================
 # 覆盖率配置（tarpaulin）
+# 注意：tarpaulin 0.37 不读取 [package.metadata.tarpaulin] 也不支持
+# .config/tarpaulin.toml（Windows 上有 bug）。豁免规则通过 coverage.yml
+# 的 --exclude-files CLI 参数传入，遵循 PLAN 2.9 的豁免清单。
 # =============================================================================
-
-[package.metadata.tarpaulin]
-# 豁免文件：Bevy App 构建、EGUI 绘制回调、main 入口、纯 Component 派生
-exclude-files = [
-    "**/src/main.rs",
-    "**/src/font_center.rs",
-    "**/src/plugins/**/*.rs",
-]
 
 [[bench]]
 name = "loading_bench"
