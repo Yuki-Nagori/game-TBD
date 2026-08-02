@@ -532,7 +532,7 @@
 #### 2.9.1 测试覆盖率基线建设
 
 - [x] **覆盖率目标制定**
-  - [x] 整体行覆盖率：60%（当前 3.59% → 需 tarpaulin 验证）
+  - [x] 整体行覆盖率：60%（豁免 Bevy 插件/main/字体后实测 **76.94%**，2026-08-02）
   - [x] 核心模块覆盖率：80%（`core/`、`lua_api/`、`asset_manager/`）
   - [x] 工具模块覆盖率：50%（`utils/`、`components/`、`resources/`）
   - [ ] Bevy 插件系统：优先覆盖 `run_if` 条件和纯函数逻辑（UI 渲染系统暂不要求）— **延期至 Phase 3**
@@ -615,7 +615,7 @@
 | clippy 警告 | 0 |
 | luacheck 警告 | 0 |
 
-> **覆盖率待验证**：运行 `cd engine && cargo tarpaulin --features dev-tools` 获取精确值。
+> **覆盖率（已验证 2026-08-02）**：`cd engine && cargo tarpaulin --features dev-tools --exclude-files 'src/main.rs' 'src/font_center.rs' 'src/plugins/*'` → **76.94%**（367/477 行）。豁免 Bevy 插件系统、`main.rs` 入口、`font_center.rs`（EGUI 字体/主题），符合 2.9.1 的豁免清单；插件系统覆盖按计划延期至 Phase 3。
 
 **里程碑**：✅ `cargo test --features dev-tools` 全部通过（新增 52 测试，总计 107 Rust + 14 Lua）、CI 覆盖率门禁 `--fail-under 60` 生效、性能规范审计无遗留问题
 

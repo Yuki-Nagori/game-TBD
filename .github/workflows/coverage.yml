@@ -35,9 +35,11 @@ jobs:
       - name: Install tarpaulin
         run: cargo install cargo-tarpaulin
       - name: Generate coverage
+        # 豁免 Bevy 插件/main/字体（遵循 PLAN 2.9：插件覆盖延期至 Phase 3）
+        # 注：tarpaulin 0.37 的 .config/tarpaulin.toml 在 Windows 有 bug（把 exclude-files 当 manifest path），故用 CLI 参数
         run: |
           cd engine
-          cargo tarpaulin --features dev-tools --out Xml --out Html --fail-under 60
+          cargo tarpaulin --features dev-tools --exclude-files 'src/main.rs' 'src/font_center.rs' 'src/plugins/*' --out Xml --out Html --fail-under 60
       - name: Upload to Codecov
         uses: codecov/codecov-action@v4
         with:
