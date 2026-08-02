@@ -126,9 +126,9 @@ lto = "fat"             # 全链接时优化
 [package.metadata.tarpaulin]
 # 豁免文件：Bevy App 构建、EGUI 绘制回调、main 入口、纯 Component 派生
 exclude-files = [
-    "src/main.rs",
-    "src/font_center.rs",
-    "src/plugins/*",
+    "**/src/main.rs",
+    "**/src/font_center.rs",
+    "**/src/plugins/**/*.rs",
 ]
 
 [[bench]]
