@@ -531,22 +531,6 @@ task("setup")
         -- 安装 Rust 工具
         print("\n2. Installing Rust tools...")
 
-        -- sccache
-        print("  Checking sccache (compile cache)...")
-        local sccache_installed = try {function () return os.iorunv("which", {"sccache"}) end}
-        if sccache_installed then
-            print("    sccache already installed")
-        else
-            print("    Installing sccache...")
-            local ok = try {function () os.run("cargo install sccache") return true end}
-            if ok then
-                print("    sccache installed successfully")
-            else
-                print("    sccache install failed")
-                print("    Manual install: cargo install sccache")
-            end
-        end
-
         -- stylua
         print("  Checking stylua (Lua formatter)...")
         local stylua_installed = try {function () return os.iorunv("which", {"stylua"}) end}

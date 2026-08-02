@@ -179,7 +179,7 @@ PLAYER_CONFIG = {
 ### 5.2 测试规范
 
 - **命名**：`test_{模块}_{场景}_{预期结果}`
-- **断言**：禁止裸 `assert!` 无消息；错误测试必须验证具体错误类型；浮点比较用 `approx_eq`。
+- **断言**：禁止裸 `assert!` 无消息；错误测试必须验证具体错误类型；浮点比较使用 epsilon（如 `(a - b).abs() < 1e-6`）。
 - **夹具**：复杂数据放 `tests/fixtures/`，禁止测试内硬编码长 Lua 脚本。
 
 ```rust
@@ -197,8 +197,8 @@ fn test_asset_manager_reload_clears_old_state() {
 
 ### 5.3 覆盖率门禁
 
-- 整体行覆盖率 ≥ 60%（`cargo tarpaulin --fail-under 60`）
-- PR Patch 覆盖率 ≥ 70%
+- 整体行覆盖率 ≥ 60%（`cargo tarpaulin --fail-under 60`，CI 已生效）
+- PR Patch 覆盖率 ≥ 70%（待 Codecov 后台配置后启用，当前未强制）
 - 豁免：Bevy `App` 构建、EGUI 绘制回调、`main.rs` 入口、纯 `Component` 派生
 
 ---
@@ -276,7 +276,7 @@ xmake build     # 3. 最后构建（可选，节约时间，CI 会跑）
 
 #### 工作流约束
 
-- **禁止并行编译过载**：`cargo` 已配置 `sccache` + `incremental = true`，不要额外加 `-j` 参数让 CPU 满载。
+- **控制并行度**：`cargo` 已配置 `incremental = true`，依赖产物缓存在 `engine/target/`，使用默认并行即可；不要额外加高 `-j` 参数（`xmake check` 内部已用 `-j 2` 限制并发）。
 - **分类 commit**：每完成一类工作（如"core 模块补测"）commit 一次，不要混提交。
 - **必须通过测试和格式化才 commit**：`xmake check` 全绿后再 `git commit`。
 - **`xmake build` 放最后**：开发迭代期以 `cargo test` 为主，完整构建留到阶段收尾或 CI。
@@ -301,6 +301,8 @@ xmake build     # 3. 最后构建（可选，节约时间，CI 会跑）
 | `components/` | Component 必须是纯数据，禁止方法（除 `Default`/`new`） |
 | `core/` | 业务逻辑必须可脱离 Bevy App 测试 |
 | `resources/` | Resource 初始化必须安全（`Default` 或 `init_resource`） |
+| `font_center.rs` | 字体/暗色主题全局基础设施，禁止每帧重建字体纹理 |
+| `log_plugin.rs` | tracing → 控制台日志转发，禁止阻塞接收端 |
 | `game/` (Lua) | 脚本不 panic，错误通过 `log_error` 报告 |
 
 ---

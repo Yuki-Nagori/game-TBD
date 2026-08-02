@@ -64,7 +64,6 @@ cargo test --profile releasedbg
 ```toml
 [build]
 incremental = true              # 增量编译
-rustc-wrapper = "sccache"       # 编译缓存
 ```
 
 ### 2. Profile 配置 (`engine/Cargo.toml`)
@@ -80,18 +79,6 @@ rustc-wrapper = "sccache"       # 编译缓存
 - `codegen-units = 256`: 更多并行
 
 ## 推荐工具
-
-### sccache (编译缓存)
-
-跨项目共享编译结果：
-
-```bash
-cargo install sccache
-
-# 启用：编辑 engine/.cargo/config.toml
-[build]
-rustc-wrapper = "sccache"
-```
 
 ### cargo-watch (自动重编译)
 
@@ -134,7 +121,7 @@ cargo check                # 只检查语法（最快）
 
 ## Bevy 特定优化
 
-Bevy 0.13 编译时间确实较长，以下技巧有帮助：
+Bevy 编译时间确实较长，以下技巧有帮助：
 
 1. **动态链接** (仅限开发):
    ```bash
