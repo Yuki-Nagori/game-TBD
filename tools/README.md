@@ -37,7 +37,6 @@ xmake run
 
 | 工具 | 作用 | 安装方式 |
 |:---|:---|:---|
-| sccache | 编译缓存 | `cargo install sccache` |
 | stylua | Lua 格式化 | `cargo install stylua` |
 
 ### 4. 脚本工具
@@ -94,8 +93,7 @@ xmake f -m releasedbg && xmake b
 
 详见 `docs/build-optimization.md`，已配置的优化：
 
-- **sccache 编译缓存**: 跨项目共享编译结果
-- **增量编译**: 默认开启
+- **增量编译**: 默认开启（依赖产物与增量单元缓存在 `engine/target/`）
 - **Profile 配置**: 开发模式快速编译，发布模式全优化
 
 ## 调试与日志

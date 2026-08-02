@@ -73,7 +73,7 @@
 
 ## 技术架构
 
-**技术栈**：Rust (Bevy 0.14) + Lua + xmake
+**技术栈**：Rust (Bevy 0.18) + Lua 5.5 + xmake
 
 ### 目录结构
 
@@ -81,10 +81,12 @@
 ~/game-TBD/
 ├── engine/                  # Rust 核心引擎
 │   ├── Cargo.toml
+│   ├── .cargo/config.toml   # 增量编译配置（incremental）
 │   ├── src/
 │   │   ├── main.rs          # 主入口（精简，仅插件注册）
 │   │   ├── lib.rs           # 库入口 + rustdoc
 │   │   ├── asset_manager.rs # 资源管理器（加载/缓存/清单验证）
+│   │   ├── font_center.rs   # 全局字体 / 暗色主题基础设施
 │   │   ├── plugins/         # Bevy 插件系统
 │   │   │   ├── mod.rs           # 插件汇总 (GamePlugin)
 │   │   │   ├── player_plugin.rs    # 玩家：输入、移动、动画
@@ -92,6 +94,7 @@
 │   │   │   ├── scene_plugin.rs     # 场景：初始化、方块建筑
 │   │   │   ├── lua_command_plugin.rs  # Lua 命令处理
 │   │   │   ├── hot_reload_plugin.rs   # 热重载
+│   │   │   ├── log_plugin.rs        # tracing → 控制台日志转发
 │   │   │   └── debug_console_plugin.rs # 调试控制台
 │   │   ├── components/      # ECS 组件定义
 │   │   ├── resources/       # 全局资源
@@ -99,16 +102,19 @@
 │   │   ├── lua_api/         # Lua 运行时与 API
 │   │   ├── constants.rs     # 游戏常量（速度、距离、颜色）
 │   │   └── utils.rs         # 工具函数
+│   ├── crates/core/         # 核心引擎库（workspace 成员，Phase 3 迁移预留）
 │   ├── tests/               # 集成测试
 │   │   ├── lua_api_test.rs
 │   │   ├── integration_test.rs
 │   │   ├── asset_manifest_test.rs
+│   │   ├── core_test.rs
 │   │   └── fixtures/        # 测试夹具
 │   └── benches/             # 基准测试
 │       └── loading_bench.rs
 │
 ├── game/                    # Lua 游戏逻辑（剧本）
 │   ├── main.lua             # 入口脚本
+│   ├── config.toml          # 游戏主配置（版本/起始年份/时间流速）
 │   ├── config/              # 配置文件
 │   │   ├── game.lua
 │   │   ├── player.lua
@@ -116,6 +122,8 @@
 │   │   ├── colors.lua
 │   │   └── scenes.lua
 │   └── tests/               # Lua 测试 (busted)
+│       ├── test_config.lua
+│       └── test_game_logic.lua
 │
 ├── assets/                  # 游戏资源（模型、贴图、音效）
 │
@@ -126,8 +134,10 @@
 │   ├── engine-design.md     # 引擎架构设计
 │   ├── lua-api.md           # Lua API 接口规范
 │   ├── mod-system.md        # Mod 系统设计与创作指南
-│   ├── MOD_API.md           # Mod API 架构文档
-│   └── template-system.md   # Mod 模板工具使用
+│   ├── mod-api.md          # Mod API 架构文档
+│   ├── performance-guidelines.md # 性能编码规范
+│   ├── template-system.md   # Mod 模板工具使用
+│   └── testing-guide.md     # 测试策略与规范
 │
 ├── .github/                 # CI/CD 配置
 │   └── workflows/
@@ -394,9 +404,9 @@
   - rkyv 支持零拷贝反序列化，性能更高，但序列化后数据为 `Archived*` 类型，访问方式有变化
   - rkyv 提供 `uuid-1` 和 `hashbrown-0_15` feature，与项目其他依赖兼容
 - **⚠️ mlua `lua54` → `lua55` + `serialize` → `serde`**：Lua 版本升级至 5.5，feature 标志需同步调整。
-- **⚠️ bevy_rapier3d `KinematicCharacterController`**：需验证 0.33 中角色移动 API 是否变化。
+- **⚠️ bevy_rapier3d `KinematicCharacterController`**：需验证 0.33 中角色移动 API 是否变化。（✅ 已在 2.8 用 `Dynamic` 刚体 + `Velocity` 控制替代，不再依赖 KCC）
 
-> 详细迁移指南见 [`PLAN-2.7-dependency-upgrade.md`](./PLAN-2.7-dependency-upgrade.md)
+> 迁移对照表与步骤详见上方 2.7.1 / 2.7.3 小节
 
 **里程碑**：✅ `cargo run` 能正常运行，所有现有功能（3D场景、角色控制、调试控制台、热重载）正常工作。xmake check 全通过。
 
@@ -596,10 +606,10 @@
 
 | 指标 | 数值 |
 |:---|:---|
-| Rust 单元测试 | 70 |
+| Rust 单元测试 | 83 |
 | Rust 集成测试 | 24 |
 | Lua 测试 | 14 |
-| 总测试 | 108 |
+| 总测试 | 121 |
 | 平均单测试耗时 | < 10ms |
 | xmake check 总耗时 | ~50s |
 | clippy 警告 | 0 |
@@ -607,7 +617,7 @@
 
 > **覆盖率待验证**：运行 `cd engine && cargo tarpaulin --features dev-tools` 获取精确值。
 
-**里程碑**：✅ `cargo test --features dev-tools` 全部通过（新增 52 测试，总计 94 Rust + 14 Lua）、CI 覆盖率门禁 `--fail-under 60` 生效、性能规范审计无遗留问题
+**里程碑**：✅ `cargo test --features dev-tools` 全部通过（新增 52 测试，总计 107 Rust + 14 Lua）、CI 覆盖率门禁 `--fail-under 60` 生效、性能规范审计无遗留问题
 
 ---
 
@@ -694,10 +704,10 @@
 
 ### 2026-04-12 初始决策
 - **引擎**：Bevy (Rust ECS 引擎)
-- **脚本**：Lua 5.4 (游戏逻辑、剧情)
+- **脚本**：Lua 5.5 (游戏逻辑、剧情)
 - **构建**：xmake (主控) + cargo (Rust)
 - **3D 模型格式**：glTF 2.0
-- **物理**：bevy_rapier3d
+- **物理**：bevy_rapier3d 0.33
 - **UI**：bevy_ui (内置) 或 bevy_egui
 
 ### 2026-04-12 设计方向确定
@@ -726,7 +736,7 @@
 - **相机控制**：鼠标移动触发相机跟随（类似《原神》），右键释放技能
 - **物理引擎**：集成 Rapier3D，玩家和场景均有碰撞体
 - **代码重构**：main.rs 拆分为 plugins/ 模块，遵循 Bevy 插件最佳实践
-- **人物移动**：使用 KinematicCharacterController 实现带碰撞的移动
+- **人物移动**：使用 KinematicCharacterController 实现带碰撞的移动（注：2.8 起改用 `Dynamic` 刚体 + `Velocity` 控制）
 
 ### 2026-04-19 ConsoleLogLayer 修复
 - **问题**：`ConsoleLogLayer` 实现了 `tracing_subscriber::Layer` 但从未注册，调试控制台日志面板始终为空
@@ -762,7 +772,7 @@
   - 场景编辑器（`editor` 命令）— Building/Tree/Wall 预设，X/Z/Y 滑动条，放置/撤销/清空
 - **资源管理器**（`engine/src/asset_manager.rs`）：
   - `AssetManager` 封装 Bevy AssetServer，跟踪 Loading/Ready/Failed 状态
-  - LRU 缓存（`lru = "0.12"`），64 条目上限，支持 invalidate / clear_unused_older_than
+  - LRU 缓存（`lru = "0.16.3"`），64 条目上限，支持 invalidate / clear_unused_older_than
   - 资产清单验证（`AssetManifest` + `ValidationError`）：必填字段、路径安全、扩展名白名单、路径唯一性、文件存在性
   - 资产打包工具（`xmake pack-assets`）：基于 `assets/manifest.toml` 生成 `{name}-v{version}.zip`
 - **热重载扩展**：监听 `.png/.jpg/.gltf/.glb`，触发 `AssetManager::reload`
@@ -844,7 +854,7 @@
 
 - [x] 确定核心玩法：蝴蝶效应人生模拟
 - [x] 确定地图策略：关键区域法
-- [x] 确定游戏名称
+- [ ] 确定游戏名称（当前仍为代号 TBD）
 - [x] 美术风格：极简 Low Poly（方块建筑）
 - [x] 战斗系统：实时 ARPG
 - [x] 资源来源：程序化生成 + 自制极简资产
@@ -866,12 +876,6 @@
 ### Lua
 - [Programming in Lua](https://www.lua.org/pil/)
 - [mlua 文档](https://docs.rs/mlua/)
-
----
-
-## 每日开发日志
-
-> 在 `docs/daily/` 下记录每日进展
 
 ---
 

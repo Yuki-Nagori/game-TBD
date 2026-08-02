@@ -31,8 +31,7 @@ jobs:
             libgles2-mesa-dev \
             libvulkan-dev \
             libegl1-mesa-dev \
-            pkg-config \
-            sccache
+            pkg-config
       - name: Install tarpaulin
         run: cargo install cargo-tarpaulin
       - name: Generate coverage

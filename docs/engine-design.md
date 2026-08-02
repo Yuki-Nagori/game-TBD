@@ -101,13 +101,13 @@ pub struct HotReloadSystem {
 
 ```toml
 [dependencies]
-bevy = "0.13"           # ECS 游戏引擎
-mlua = { version = "0.9", features = ["lua54"] }  # Lua 5.4 绑定
+bevy = "0.18"           # ECS 游戏引擎
+mlua = { version = "0.11.6", features = ["lua55"] }  # Lua 5.5 绑定
 anyhow = "1.0"          # 错误处理
 tracing = "0.1"         # 日志
 serde = { version = "1.0", features = ["derive"] }  # 序列化
-notify = "6.1"          # 文件监听（热重载）
-uuid = { version = "1.7", features = ["v4"] }      # 实体 ID
+notify = "8.2.0"        # 文件监听（热重载）
+uuid = { version = "1.16", features = ["v4"] }      # 实体 ID
 
 # 存档系统
 rusqlite = { version = "0.32", features = ["bundled"] }  # SQLite

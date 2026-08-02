@@ -208,7 +208,7 @@ xmake pack-assets          # 基于 manifest.toml 打包资产包
 │   ├── engine-design.md     # 引擎架构设计
 │   ├── lua-api.md           # Lua API 接口规范
 │   ├── mod-system.md        # Mod 系统设计与创作指南
-│   ├── MOD_API.md           # Mod API 架构文档
+│   ├── mod-api.md          # Mod API 架构文档
 │   └── template-system.md   # Mod 模板工具使用
 │
 ├── .github/                 # CI/CD 配置
